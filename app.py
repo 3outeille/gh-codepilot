@@ -404,5 +404,10 @@ def _reaper():
 
 
 if __name__ == "__main__":
+    import os as _os
     eventlet.spawn(_reaper)
-    socketio.run(app, host="127.0.0.1", port=5050, debug=True)
+    # Debug/auto-reloader must be off in production: file edits inside cloned
+    # repos (e.g. Claude Code making changes) would otherwise restart the
+    # server mid-session and kill active PTYs. Opt in via GHCP_DEBUG=1 for dev.
+    debug = _os.environ.get("GHCP_DEBUG") == "1"
+    socketio.run(app, host="127.0.0.1", port=5050, debug=debug)
