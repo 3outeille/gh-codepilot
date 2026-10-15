@@ -17,3 +17,5 @@ repos/
 
 # pyenv
 .python-version
+cache/
+prereviews/

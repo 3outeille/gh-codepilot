@@ -44,7 +44,11 @@ def _run(cmd, cwd=None, check=True, timeout=NETWORK_TIMEOUT, network=False):
                             start_new_session=True)
     try:
         out, err = proc.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except Exception as e:
+        # Under eventlet monkey-patching the raised TimeoutExpired is a
+        # different class object than subprocess.TimeoutExpired, so match by name.
+        if type(e).__name__ != "TimeoutExpired":
+            raise
         try:
             os.killpg(proc.pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -108,6 +112,14 @@ def ensure_worktree(repo, number, category):
 
     Returns the working directory path.
     """
+    repo_dir = REPOS_DIR / _repo_dir_name(repo)
+    wt_dir = REPOS_DIR / f"{_repo_dir_name(repo)}--pr-{number}"
+    if category == "pr" and wt_dir.exists() and (wt_dir / ".git").exists():
+        # Fast path: one network round-trip. `pull --ff-only` fetches just the
+        # checked-out branch; no `fetch --all`, no `gh pr view` (each 5–30 s here).
+        _run(["git", "-C", str(wt_dir), "pull", "--ff-only"], check=False, network=True)
+        return wt_dir
+
     repo_dir = ensure_repo(repo)
 
     if category != "pr":
@@ -117,8 +129,6 @@ def ensure_worktree(repo, number, category):
         return repo_dir
 
     # PRs get their own worktree
-    wt_dir = REPOS_DIR / f"{_repo_dir_name(repo)}--pr-{number}"
-
     branch = _get_pr_branch(repo, number)
     if not branch:
         # Fallback: fetch the PR ref directly

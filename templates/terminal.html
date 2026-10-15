@@ -37,7 +37,15 @@
 
     /* Terminal area */
     .terminal-area { display: flex; flex-direction: column; overflow: hidden; position: relative; }
-    #terminal { flex: 1; }
+    #terminal { flex: 1; position: relative; }
+    .term-slot { position: absolute; inset: 0; display: none; }
+    .term-slot.on { display: block; }
+    .session-item .dot { width: 7px; height: 7px; border-radius: 50%; background: #3fb950; flex-shrink: 0; }
+    .session-item.starting .dot { background: #d29922; }
+    .session-item.ended .dot { background: #484f58; }
+    .session-item .x { margin-left: 2px; color: #484f58; font-size: 12px; line-height: 1; padding: 0 2px; border-radius: 3px; }
+    .session-item .x:hover { color: #f85149; background: #21262d; }
+    .session-item.past { opacity: .75; font-style: italic; }
     .terminal-overlay { position: absolute; inset: 31px 0 0 0; display: flex; align-items: center; justify-content: center; background: rgba(13,17,23,0.9); z-index: 10; flex-direction: column; gap: 8px; }
     .terminal-overlay .status { font-size: 13px; color: #8b949e; }
     .terminal-overlay .overlay-new { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 6px 16px; font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 4px; }
@@ -50,6 +58,9 @@
     .topbar .toggle { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
     .topbar .toggle.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
     .workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+    .rt-form { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:0 2px; }
+    .rt-form input, .rt-form select { background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:4px 6px; font-size:11px; font-family:Menlo,monospace; }
+    #rt-target { flex:1; min-width:220px; }
     .splitter { height: 5px; cursor: row-resize; background: #21262d; flex-shrink: 0; }
     .splitter:hover, .splitter.dragging { background: #58a6ff; }
     .diff-pane { flex: 1; min-height: 120px; display: flex; flex-direction: column; background: #0d1117; overflow: hidden; }
@@ -131,12 +142,22 @@
     .chk-log .hl { color: #f85149; font-weight: 600; }
     .chk-more { font-size: 11px; color: #8b949e; cursor: pointer; padding: 4px 8px; } .chk-more:hover { color: #e6edf3; }
 
-    /* Pre-review */
-    .review { padding: 10px 14px; max-width: 900px; }
-    .review-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 11.5px; color: #8b949e; }
-    .review-bar button { background: #8957e5; color: #fff; border: none; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
-    .review-bar button:disabled { opacity: .6; cursor: wait; }
-    .review-bar button.sec { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; font-weight: 500; }
+    /* Claude review (inline in diff) */
+    .cr-banner { display: flex; gap: 12px; align-items: flex-start; margin: 8px 10px; padding: 8px 12px; border: 1px solid #3d2f6b; border-radius: 6px; background: #161322; font-size: 11.5px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .cr-banner .cr-sum { flex: 1; min-width: 0; color: #c9d1d9; }
+    .cr-banner .cr-sum .md { margin-top: 4px; color: #8b949e; } .cr-banner .cr-sum .md p { margin: 0 0 3px; }
+    .cr-banner code { background: #0d1117; border: 1px solid #21262d; border-radius: 3px; padding: 0 3px; font-size: 10.5px; }
+    .cr-banner button { background: #8957e5; color: #fff; border: none; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .cr-banner button.sec { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; font-weight: 500; }
+    .cr-banner button:disabled { opacity: .6; cursor: wait; }
+    .cr-card { border-left: 3px solid #8957e5; }
+    .cr-card.sev-high { border-left-color: #f85149; } .cr-card.sev-medium { border-left-color: #d29922; } .cr-card.sev-low { border-left-color: #58a6ff; } .cr-card.sev-nit { border-left-color: #484f58; }
+    .cr-sev { font-size: 9px; padding: 0 5px; border-radius: 8px; border: 1px solid #30363d; color: #8b949e; text-transform: uppercase; letter-spacing: .04em; }
+    .sev-high .cr-sev { color: #f85149; border-color: #f85149; } .sev-medium .cr-sev { color: #d29922; border-color: #d29922; }
+    .cr-title { color: #e6edf3; font-weight: 600; }
+    .cr-pad td { background: #0d1117 !important; }
+    #claude-toggle.on { background: #3d2f6b; border-color: #8957e5; color: #fff; }
+    #claude-toggle .n { margin-left: 4px; font-size: 10px; padding: 0 5px; border-radius: 8px; background: #8957e5; color: #fff; }
 
     /* Expand context + view file */
     .xp-row td { padding: 0 !important; }
@@ -315,7 +336,6 @@
           <button class="on" data-view="diff" onclick="setView('diff')">Diff</button>
           {% if category == 'pr' %}
           <button data-view="checks" onclick="setView('checks')">Checks<span class="n" id="checks-n"></span></button>
-          <button data-view="review" onclick="setView('review')">Review</button>
           <button data-view="jobs" onclick="setView('jobs')">Jobs<span class="n" id="jobs-n"></span></button>
           {% endif %}
         </div>
@@ -331,6 +351,7 @@
           <div class="seg"><button class="on" id="tree-toggle" onclick="toggleTree()" title="File tree">☰ files</button></div>
           {% if category == 'pr' %}
           <div class="seg"><button class="on" id="cpanel-toggle" onclick="toggleCpanel()" title="Comments panel">💬 <span id="comments-count">…</span></button></div>
+          <div class="seg"><button id="claude-toggle" onclick="toggleClaudeReview()" title="Claude critiques every hunk inline">🤖 Claude review</button></div>
           {% endif %}
         </div>
         <span class="spacer"></span>
@@ -350,7 +371,6 @@
         </aside>
       </div>
       <div class="panel" id="checks-body"></div>
-      <div class="panel" id="review-body"></div>
       <div class="panel" id="jobs-body"></div>
     </aside>
     <div class="splitter" id="splitter"></div>
@@ -385,8 +405,12 @@
     const CATEGORY = '{{ category }}';
     const ME = '{{ me }}';
 
-    // Terminal setup
-    const term = new Terminal({
+    // ── Terminal slots: one live Claude session per tab, all on one socket ──
+    const socket = io();
+    const slots = {};          // slot id → { term, fit, el, ready, ended, sessionId, label, status }
+    let activeSlot = null;
+    let slotSeq = 0;
+    const TERM_OPTS = {
       theme: { background: '#0d1117', foreground: '#e6edf3', cursor: '#58a6ff',
                selectionBackground: '#264f78', black: '#484f58', red: '#ff7b72',
                green: '#3fb950', yellow: '#d29922', blue: '#58a6ff',
@@ -394,17 +418,42 @@
       fontFamily: '"Cascadia Code", "Fira Code", Menlo, monospace',
       fontSize: 12,
       cursorBlink: true,
-    });
-    const fitAddon = new FitAddon.FitAddon();
-    term.loadAddon(fitAddon);
-    term.loadAddon(new WebLinksAddon.WebLinksAddon((event, uri) => window.open(uri, '_blank')));
-    term.open(document.getElementById('terminal'));
-    fitAddon.fit();
-
-    // Socket setup
-    const socket = io();
-    let termActive = false;
-    let activeSessionId = null;
+    };
+    function createSlot(sessionId, label) {
+      const id = String(++slotSeq);
+      const el = document.createElement('div'); el.className = 'term-slot'; el.dataset.slot = id;
+      document.getElementById('terminal').appendChild(el);
+      const term = new Terminal(TERM_OPTS);
+      const fit = new FitAddon.FitAddon();
+      term.loadAddon(fit);
+      term.loadAddon(new WebLinksAddon.WebLinksAddon((event, uri) => window.open(uri, '_blank')));
+      term.open(el);
+      term.onData(data => { if (slots[id]?.ready) socket.emit('pty_input', { slot: id, data }); });
+      term.onResize(({ rows, cols }) => { if (slots[id]?.ready) socket.emit('resize', { slot: id, rows, cols }); });
+      slots[id] = { id, term, fit, el, ready: false, ended: false, sessionId, label, status: 'Preparing…' };
+      return slots[id];
+    }
+    function showSlot(id) {
+      activeSlot = id;
+      Object.values(slots).forEach(s => s.el.classList.toggle('on', s.id === id));
+      const s = slots[id];
+      if (!s) { showOverlay('Select a session above, or start a new one', true); renderTabs(); return; }
+      requestAnimationFrame(() => { s.fit.fit(); s.term.focus(); });
+      if (s.ready) hideOverlay();
+      else showOverlay(s.status, s.ended);
+      renderTabs();
+    }
+    function closeSlot(id, ev) {
+      ev?.stopPropagation();
+      const s = slots[id]; if (!s) return;
+      if (!s.ended) socket.emit('kill_terminal', { slot: id });
+      s.term.dispose(); s.el.remove(); delete slots[id];
+      if (activeSlot === id) { const rest = Object.keys(slots); showSlot(rest.length ? rest[rest.length - 1] : null); }
+      else renderTabs();
+      loadSessions();
+    }
+    const isLive = () => !!(activeSlot && slots[activeSlot]?.ready);
+    function fitActive() { const s = slots[activeSlot]; if (s) s.fit.fit(); }
 
     // ── Diff pane ──
     const diffPane = document.getElementById('diff-pane');
@@ -416,10 +465,7 @@
     let diffUi = null;
     let lastDiffText = null;
 
-    function refit() {
-      fitAddon.fit();
-      if (termActive) socket.emit('resize', { rows: term.rows, cols: term.cols });
-    }
+    function refit() { fitActive(); }
 
     function toggleDiffPane() {
       const hidden = diffPane.classList.toggle('hidden');
@@ -465,6 +511,7 @@
       diffUi.draw();
       diffUi.highlightCode();
       injectComments();
+      injectClaudeReview();
       addExpanders();
       buildTree(files);
       renderCpanel();
@@ -473,11 +520,11 @@
     // ── Inline review comments ──
     let reviewComments = [];
 
-    async function loadReviewComments() {
+    async function loadReviewComments(fresh) {
       if (CATEGORY !== 'pr') return;
       let unresolved = null;
       try {
-        const res = await fetch(`/api/review_comments?repo=${encodeURIComponent(REPO)}&number=${NUMBER}`);
+        const res = await fetch(`/api/review_comments?repo=${encodeURIComponent(REPO)}&number=${NUMBER}${fresh ? '&fresh=1' : ''}`);
         const data = await res.json();
         reviewComments = data.comments || [];
         unresolved = data.unresolved;
@@ -497,6 +544,7 @@
       // Threads live in the side panel; the diff only gets a gutter marker per thread
       // that scrolls the panel to it.
       if (diffSource !== 'pr' || !reviewComments.length) return;
+      diffBody.querySelectorAll('.rc-marker').forEach(m => m.remove());
       const wrappers = {};
       diffBody.querySelectorAll('.d2h-file-wrapper').forEach(w => {
         const name = w.querySelector('.d2h-file-name')?.textContent.trim();
@@ -527,8 +575,8 @@
 
     // ── Views ──
     let view = 'diff';
-    const loaded = { checks: false, review: false, jobs: false };
-    const loaders = { checks: () => loadChecks(), review: () => loadReview(), jobs: () => loadJobs() };
+    const loaded = { checks: false, jobs: false };
+    const loaders = { checks: () => loadChecks(), jobs: () => loadJobs() };
     function setView(v) {
       view = v;
       diffPane.dataset.view = v;
@@ -537,7 +585,7 @@
       if (v !== 'diff' && !loaded[v]) { loaded[v] = true; loaders[v](); }
     }
     function refreshView() {
-      if (view === 'diff') { lastDiffText = null; loadReviewComments().then(loadDiff); }
+      if (view === 'diff') { lastDiffText = null; loadDiff(true); loadReviewComments(true).then(() => { if (diffUi) { injectComments(); renderCpanel(); } }); }
       else loaders[view]();
     }
     const md = s => marked.parse(s || '', { breaks: true });
@@ -635,49 +683,201 @@
       host.after(pre);
     }
 
-    // ── Pre-review ──
-    async function loadReview() {
-      const el = document.getElementById('review-body');
-      el.innerHTML = '<div class="panel-empty">Loading…</div>';
-      renderReview(await api('/api/prereview'));
+    // ── Claude review: findings injected into the diff as inline rows ──
+    let claudeOn = false, claudeReview = null, claudeBusy = false;
+    try { claudeOn = localStorage.getItem('terminal.claudeReview') === '1'; } catch (e) {}
+    const claudeBtn = document.getElementById('claude-toggle');
+    function paintClaudeBtn() {
+      if (!claudeBtn) return;
+      claudeBtn.classList.toggle('on', claudeOn);
+      claudeBtn.disabled = claudeBusy;
+      const n = claudeReview ? claudeReview.findings.length : null;
+      claudeBtn.innerHTML = claudeBusy ? '🤖 Reviewing… (1–5 min)' : `🤖 Claude review${claudeOn && n !== null ? ` <span class="n">${n}</span>` : ''}`;
     }
-    function renderReview(d) {
-      const el = document.getElementById('review-body');
-      const bar = `<div class="review-bar">
-        ${d.review ? `<span>Claude pre-review for <code>${escapeHtml(d.sha || '')}</code>${d.cached ? ' (cached)' : ''}</span><button class="sec" onclick="runReview()">Regenerate</button>`
-                   : `<span>No pre-review yet for <code>${escapeHtml(d.sha || '')}</code>.</span><button onclick="runReview()">Draft review</button>`}
-      </div>`;
-      el.innerHTML = `<div class="review">${bar}${d.error ? `<div class="panel-err">${escapeHtml(d.error)}</div>` : ''}${d.review ? `<div class="md">${md(d.review)}</div>` : '<div class="panel-empty" style="text-align:left;padding:4px 0">One non-interactive Claude pass over the diff, the relore brief and failing CI. Takes a minute or two; cached per commit.</div>'}</div>`;
+    async function toggleClaudeReview() {
+      claudeOn = !claudeOn;
+      try { localStorage.setItem('terminal.claudeReview', claudeOn ? '1' : '0'); } catch (e) {}
+      paintClaudeBtn();
+      if (claudeOn) await ensureClaudeReview(false);
+      if (lastDiffText !== null) renderDiff(lastDiffText);
     }
-    async function runReview() {
-      const el = document.getElementById('review-body');
-      el.querySelectorAll('.review-bar button').forEach(b => { b.disabled = true; b.textContent = 'Running… (1–3 min)'; });
-      const d = await fetch('/api/prereview', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({repo: REPO, number: NUMBER}) }).then(r => r.json());
-      renderReview(d);
+    async function ensureClaudeReview(force) {
+      if (claudeBusy) return;
+      if (!force) {
+        const d = await api('/api/prereview');
+        claudeReview = d.review || null; claudeReview && (claudeReview.sha = d.sha);
+        if (claudeReview || d.error) { if (d.error) claudeReview = { summary: '', findings: [], error: d.error }; paintClaudeBtn(); return; }
+      }
+      claudeBusy = true; paintClaudeBtn();
+      let d;
+      try { d = await fetch('/api/prereview', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({repo: REPO, number: NUMBER}) }).then(r => r.json()); }
+      catch (e) { d = { error: String(e) }; }
+      claudeBusy = false;
+      claudeReview = d.review ? { ...d.review, sha: d.sha } : { summary: '', findings: [], error: d.error || 'no review returned' };
+      paintClaudeBtn();
     }
+    async function regenerateClaudeReview() { await ensureClaudeReview(true); if (lastDiffText !== null) renderDiff(lastDiffText); }
+    const SEV_LABEL = { high: 'High', medium: 'Medium', low: 'Low', nit: 'Nit' };
+    function claudeCard(f) {
+      return `<div class="rc-thread cr-card sev-${f.severity}"><div class="rc-comment">
+        <div class="rc-head"><b>🤖 Claude</b><span class="cr-sev">${SEV_LABEL[f.severity] || f.severity}</span>${f.title ? `<span class="cr-title">${escapeHtml(f.title)}</span>` : ''}</div>
+        <div class="rc-body">${md(f.body)}</div></div></div>`;
+    }
+    function injectClaudeReview() {
+      if (!claudeOn || diffSource !== 'pr') return;
+      const scroll = document.getElementById('diff-scroll');
+      const r = claudeReview;
+      const banner = document.createElement('div'); banner.className = 'cr-banner';
+      const wrappers = {};
+      scroll.querySelectorAll('.d2h-file-wrapper').forEach(w => {
+        const name = w.querySelector('.d2h-file-name')?.textContent.trim();
+        if (name) wrappers[name] = w;
+      });
+      // Anchor every finding to a visible diff line: the exact line when it is in the
+      // diff, otherwise the nearest line of that file. Findings with no file are dropped.
+      let placed = 0, dropped = 0;
+      const pending = [];
+      for (const f of (r ? r.findings : [])) {
+        const w = f.path && (wrappers[f.path] || wrappers[Object.keys(wrappers).find(k => k.endsWith('/' + f.path) || f.path.endsWith('/' + k)) || '']);
+        if (!w) { dropped++; continue; }
+        const isRight = f.side !== 'old';
+        const nearest = cells => {
+          let best = null, bestD = Infinity;
+          for (const c of cells) { const n = parseInt(c.textContent.trim(), 10); if (!isNaN(n) && Math.abs(n - f.line) < bestD) { bestD = Math.abs(n - f.line); best = c; } }
+          return best;
+        };
+        const row = document.createElement('tr'); row.className = 'rc-row cr-row';
+        row.innerHTML = `<td colspan="2">${claudeCard(f)}</td>`;
+        if (diffFormat === 'line-by-line') {
+          const cell = nearest(w.querySelectorAll(`td.d2h-code-linenumber ${isRight ? '.line-num2' : '.line-num1'}`))
+                    || nearest(w.querySelectorAll(`td.d2h-code-linenumber ${isRight ? '.line-num1' : '.line-num2'}`));
+          if (!cell) { dropped++; continue; }
+          cell.closest('tr').after(row);
+        } else {
+          const sides = w.querySelectorAll('.d2h-file-side-diff');
+          let side = sides[isRight ? 1 : 0], other = sides[isRight ? 0 : 1];
+          let cell = side && nearest(side.querySelectorAll('td.d2h-code-side-linenumber'));
+          if (!cell && other) { [side, other] = [other, side]; cell = nearest(side.querySelectorAll('td.d2h-code-side-linenumber')); }
+          if (!cell) { dropped++; continue; }
+          const tr = cell.closest('tr');
+          const idx = [...tr.parentNode.children].indexOf(tr);
+          const otherTr = other && other.querySelectorAll('tbody tr')[idx];
+          tr.after(row);
+          if (otherTr) { const pad = document.createElement('tr'); pad.className = 'rc-row cr-pad'; pad.innerHTML = '<td colspan="2"></td>'; otherTr.after(pad); pending.push([row, pad]); }
+        }
+        placed++;
+      }
+      banner.innerHTML = !r
+        ? `<div class="cr-sum">No Claude review for this commit yet.</div><button onclick="regenerateClaudeReview()">Run review</button>`
+        : `<div class="cr-sum">${r.error ? `<span class="panel-err" style="padding:0">${escapeHtml(r.error)}</span>` : `<b>Claude review</b> <code>${escapeHtml(r.sha || '')}</code> · ${placed} finding${placed === 1 ? '' : 's'} inline${dropped ? ` · ${dropped} without a file not shown` : ''}<div class="md">${md(r.summary)}</div>`}</div>
+           <button class="sec" onclick="regenerateClaudeReview()" ${claudeBusy ? 'disabled' : ''}>${claudeBusy ? 'Reviewing…' : 'Regenerate'}</button>`;
+      scroll.prepend(banner);
+      // Side-by-side: size the blank row on the other side so the two tables stay aligned.
+      // Keep re-measuring: fonts, images and wrapping change the card height after first paint.
+      for (const [row, pad] of pending) new ResizeObserver(() => { pad.firstElementChild.style.height = row.getBoundingClientRect().height + 'px'; }).observe(row.firstElementChild);
+    }
+    paintClaudeBtn();
+    if (claudeOn) ensureClaudeReview(false).then(() => { if (lastDiffText !== null) renderDiff(lastDiffText); });
 
     // ── HF Jobs ──
     async function loadJobs() {
       const el = document.getElementById('jobs-body');
-      el.innerHTML = '<div class="panel-empty">Loading jobs…</div>';
+      if (document.getElementById('rt-target')) rememberRt();   // keep typed values across the 20s refresh
+      if (!document.getElementById('rt-target')) el.innerHTML = '<div class="panel-empty">Loading jobs…</div>';
       const d = await api('/api/jobs');
       if (d.error) { el.innerHTML = `<div class="panel-err">${escapeHtml(d.error)}</div>`; return; }
       const n = document.getElementById('jobs-n');
       const running = d.jobs.filter(j => /RUNNING|PENDING|STARTING/i.test(j.stage)).length;
       n.textContent = running || d.jobs.length || '';
       const cls = s => /COMPLETED/i.test(s) ? 'pass' : /ERROR|FAILED|CANCEL/i.test(s) ? 'fail' : /RUNNING|PENDING|STARTING/i.test(s) ? 'pending' : 'skipping';
-      el.innerHTML = `<div class="checks">
+      const form = `
+        <div class="chk-group"><h4>Run tests on HF Jobs</h4>
+          <div class="rt-form">
+            <input id="rt-target" placeholder="tests/path/test_x.py[::Class::test]  (space-separated ok)" value="${escapeHtml(window.__rtTarget || guessTestTarget())}">
+            <select id="rt-flavor">${['cpu-basic','cpu-upgrade','t4-small','t4-medium','l4x1','a10g-small','a10g-large','a10g-largex2','a100-large','h200'].map(f => `<option ${f === (window.__rtFlavor || 't4-small') ? 'selected' : ''}>${f}</option>`).join('')}</select>
+            <input id="rt-timeout" value="${window.__rtTimeout || '45m'}" style="width:52px" title="max duration">
+            <input id="rt-args" placeholder="extra pytest args, e.g. -k name" value="${escapeHtml(window.__rtArgs || '')}" style="width:160px">
+            <button id="rt-run" onclick="runTests(this)">Run</button>
+            <span style="color:#484f58">|</span>
+            <button id="rt-shell" onclick="startShell(this)" title="Interactive box: PR checked out in /work, browser terminal + ssh">Start shell</button>
+          </div>
+          <div id="rt-msg" style="font-size:11px;color:#8b949e;margin:4px 2px 0"><b>Run</b>: checks out the PR head in <code>huggingface/transformers-all-latest-gpu</code>, installs <code>.[testing]</code>, runs pytest. <b>Start shell</b>: same box, but interactive (browser terminal, or <code>codepilot-shell --attach &lt;id&gt;</code> for ssh); runs until cancelled or the timeout. Flavors above a10g-small need a second click.</div>
+        </div>`;
+      el.innerHTML = `<div class="checks">${form}
         <div class="chk-group"><h4>Jobs for this PR (${d.jobs.length})</h4>
-        <div style="font-size:11px;color:#8b949e;margin:0 2px 8px">Submit from the Claude session with <code>hf jobs uv run … --label ${escapeHtml(d.label)} -d</code>. Only jobs carrying that label are listed.</div>
+        <div style="font-size:11px;color:#8b949e;margin:0 2px 8px">From the Claude session: <code>codepilot-test tests/… --flavor t4-small</code>, or <code>hf jobs uv run … --label ${escapeHtml(d.label)} -d</code> for scripts. Only jobs carrying that label are listed.</div>
         ${d.jobs.map(j => `
           <div class="chk ${cls(j.stage)}" data-id="${j.id}">
             <span class="dot"></span>
-            <span class="nm" title="${escapeHtml(j.command)}"><b style="color:#e6edf3">${escapeHtml(j.stage)}</b> · ${escapeHtml(j.flavor)} · ${timeAgo(j.created_at)} · <span style="font-family:Menlo,monospace">${escapeHtml(j.command)}</span></span>
+            <span class="nm" title="${escapeHtml(j.command)}"><b style="color:#e6edf3">${escapeHtml(j.stage)}</b> · ${escapeHtml(j.flavor)} · ${timeAgo(j.created_at)} · <span style="font-family:Menlo,monospace">${escapeHtml(j.labels && j.labels['gh-codepilot-kind'] === 'tests' ? 'pytest ' + (j.labels['gh-codepilot-target'] || '') : j.labels && j.labels['gh-codepilot-kind'] === 'shell' ? 'interactive shell' : j.command)}</span></span>
+            ${j.labels && j.labels['gh-codepilot-kind'] === 'shell' && /RUNNING/i.test(j.stage) ? `<button onclick="openShell(this, '${j.id}')">open terminal</button>` : ''}
             <button onclick="toggleJobLog(this, '${j.id}')">logs</button>
             ${/RUNNING|PENDING|STARTING/i.test(j.stage) ? `<button onclick="cancelJob(this, '${j.id}')">cancel</button>` : ''}
             ${j.url ? `<a href="${j.url}" target="_blank">↗</a>` : ''}
           </div>`).join('') || '<div class="panel-empty">No jobs yet for this PR.</div>'}
         </div></div>`;
+    }
+    // Test files touched by the PR, from the cached diff text.
+    function guessTestTarget() {
+      const t = lastDiffText || '';
+      const files = [...new Set([...t.matchAll(/^\+\+\+ b\/(tests\/\S+\.py)$/gm)].map(m => m[1]))];
+      return files.slice(0, 6).join(' ');
+    }
+    function rememberRt() {
+      window.__rtTarget = document.getElementById('rt-target').value;
+      window.__rtFlavor = document.getElementById('rt-flavor').value;
+      window.__rtTimeout = document.getElementById('rt-timeout').value;
+      window.__rtArgs = document.getElementById('rt-args').value;
+    }
+    async function runTests(btn) {
+      rememberRt();
+      const msg = document.getElementById('rt-msg');
+      const target = window.__rtTarget.trim(), flavor = window.__rtFlavor;
+      if (!target) { msg.innerHTML = '<span style="color:#f85149">Give a pytest target first.</span>'; return; }
+      const big = !['cpu-basic','cpu-upgrade','t4-small','t4-medium','l4x1','a10g-small'].includes(flavor);
+      if (big && btn.dataset.armed !== '1') {
+        btn.dataset.armed = '1'; btn.textContent = `confirm ${flavor}`; btn.style.borderColor = '#d29922';
+        setTimeout(() => { btn.dataset.armed = ''; btn.textContent = 'Run'; btn.style.borderColor = ''; }, 6000);
+        return;
+      }
+      btn.disabled = true; btn.textContent = 'submitting…'; btn.dataset.armed = '';
+      const r = await fetch('/api/jobs/run-tests', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ repo: REPO, number: NUMBER, target, flavor, timeout: window.__rtTimeout, pytest_args: window.__rtArgs }) }).then(x => x.json()).catch(() => ({ error: 'request failed' }));
+      btn.disabled = false; btn.textContent = 'Run'; btn.style.borderColor = '';
+      if (r.error) { msg.innerHTML = `<span style="color:#f85149">${escapeHtml(r.error)}</span>`; return; }
+      msg.innerHTML = `<span style="color:#3fb950">submitted ${escapeHtml(r.id || '')} on ${escapeHtml(r.flavor)}</span>`;
+      setTimeout(loadJobs, 1500);
+    }
+    async function startShell(btn) {
+      rememberRt();
+      const msg = document.getElementById('rt-msg');
+      const flavor = window.__rtFlavor;
+      const big = !['cpu-basic','cpu-upgrade','t4-small','t4-medium','l4x1','a10g-small'].includes(flavor);
+      if (big && btn.dataset.armed !== '1') {
+        btn.dataset.armed = '1'; btn.textContent = `confirm ${flavor}`; btn.style.borderColor = '#d29922';
+        setTimeout(() => { btn.dataset.armed = ''; btn.textContent = 'Start shell'; btn.style.borderColor = ''; }, 6000);
+        return;
+      }
+      btn.disabled = true; btn.textContent = 'starting…'; btn.dataset.armed = '';
+      const r = await fetch('/api/jobs/shell', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ repo: REPO, number: NUMBER, flavor, timeout: '2h' }) }).then(x => x.json()).catch(() => ({ error: 'request failed' }));
+      btn.disabled = false; btn.textContent = 'Start shell'; btn.style.borderColor = '';
+      if (r.error) { msg.innerHTML = `<span style="color:#f85149">${escapeHtml(r.error)}</span>`; return; }
+      msg.innerHTML = `<span style="color:#3fb950">box ${escapeHtml(r.id || '')} starting on ${escapeHtml(r.flavor)} — scheduling takes a few minutes; "open terminal" appears on the row once it is running.</span>`;
+      setTimeout(loadJobs, 1500);
+    }
+    async function openShell(btn, id) {
+      btn.disabled = true; const t = btn.textContent; btn.textContent = '…';
+      const d = await fetch(`/api/jobs/shell-info?id=${id}`).then(r => r.json()).catch(() => ({}));
+      btn.disabled = false; btn.textContent = t;
+      const host = btn.closest('.chk'); const old = host.nextElementSibling;
+      if (old && old.classList.contains('chk-log')) old.remove();
+      const pre = document.createElement('pre'); pre.className = 'chk-log';
+      if (!d.web) { pre.textContent = d.ready ? 'tunnel not up yet, retry in a few seconds' : 'box still setting up (sshd, tunnels, checkout) — retry in a minute'; host.after(pre); return; }
+      pre.innerHTML = `browser terminal: <a href="${d.web}" target="_blank">${d.web}</a>  user <b>${escapeHtml(d.web_user)}</b>  pass <b>${escapeHtml(d.web_pass || '')}</b>
+ssh (needs local cloudflared): <code>codepilot-shell --attach ${id}</code>
+PR checkout is in /work. ${d.ready ? 'Setup finished.' : 'pip install still running; pytest may not work yet.'}`;
+      host.after(pre);
     }
     async function toggleJobLog(btn, id) {
       const host = btn.closest('.chk'); const existing = host.nextElementSibling;
@@ -950,9 +1150,9 @@
       await Promise.all(jobs);
     }
 
-    async function loadDiff() {
+    async function loadDiff(fresh) {
       const url = diffSource === 'pr'
-        ? `/api/diff?repo=${encodeURIComponent(REPO)}&number=${NUMBER}`
+        ? `/api/diff?repo=${encodeURIComponent(REPO)}&number=${NUMBER}${fresh ? '&fresh=1' : ''}`
         : `/api/local_diff?repo=${encodeURIComponent(REPO)}&number=${NUMBER}&type=${CATEGORY}`;
       try {
         const res = await fetch(url);
@@ -970,7 +1170,7 @@
     }
 
     // Local changes refresh while a session runs, so you see Claude's edits land.
-    setInterval(() => { if (termActive && diffSource === 'local' && !diffPane.classList.contains('hidden')) loadDiff(); }, 10000);
+    setInterval(() => { if (isLive() && diffSource === 'local' && !diffPane.classList.contains('hidden')) loadDiff(); }, 10000);
 
     // Draggable splitter
     (function () {
@@ -982,7 +1182,7 @@
         const ws = document.querySelector('.workspace').getBoundingClientRect();
         const h = Math.max(120, Math.min(ws.bottom - e.clientY, ws.height - 160));
         document.querySelector('.terminal-area').style.height = h + 'px';
-        fitAddon.fit();
+        fitActive();
       });
     })();
 
@@ -994,46 +1194,38 @@
         if (fmt === 'line-by-line') setFormat(fmt);
       } catch (e) {}
     })();
-    loadReviewComments().then(loadDiff);
+    // Diff and comments are independent GitHub calls: fetch both at once and draw
+    // the diff as soon as it lands; comment markers are added when they arrive.
+    loadDiff();
+    loadReviewComments().then(() => { if (diffUi) { injectComments(); renderCpanel(); } });
 
-    // Resize handling
-    window.addEventListener('resize', () => {
-      fitAddon.fit();
-      if (termActive) {
-        socket.emit('resize', { rows: term.rows, cols: term.cols });
-      }
-    });
+    window.addEventListener('resize', fitActive);
+    new ResizeObserver(fitActive).observe(document.getElementById('terminal'));
 
-    // Terminal I/O
-    term.onData(data => {
-      if (termActive) socket.emit('pty_input', { data });
-    });
-
-    socket.on('pty_output', msg => {
-      term.write(msg.data);
-    });
-
+    // Every PTY event names its slot; route it to that tab's terminal.
+    socket.on('pty_output', msg => { slots[msg.slot]?.term.write(msg.data); });
     socket.on('terminal_status', msg => {
-      showOverlay(msg.message);
+      const s = slots[msg.slot]; if (!s) return;
+      s.status = msg.message; if (msg.slot === activeSlot) showOverlay(msg.message);
     });
-
-    socket.on('terminal_ready', () => {
-      hideOverlay();
-      termActive = true;
-      term.focus();
-      fitAddon.fit();
-      // Send initial resize
-      socket.emit('resize', { rows: term.rows, cols: term.cols });
+    socket.on('terminal_ready', msg => {
+      const s = slots[msg.slot]; if (!s) return;
+      s.ready = true; s.fit.fit();
+      socket.emit('resize', { slot: s.id, rows: s.term.rows, cols: s.term.cols });
+      if (msg.slot === activeSlot) { hideOverlay(); s.term.focus(); }
+      renderTabs();
     });
-
     socket.on('terminal_error', msg => {
-      showOverlay(msg.message, true);
+      const s = slots[msg.slot]; if (!s) return;
+      s.status = msg.message; s.ended = true;
+      if (msg.slot === activeSlot) showOverlay(msg.message, true);
+      renderTabs();
     });
-
-    socket.on('pty_exit', () => {
-      termActive = false;
-      showOverlay('Session ended', true);
-      loadSessions();
+    socket.on('pty_exit', msg => {
+      const s = slots[msg.slot]; if (!s) return;
+      s.ready = false; s.ended = true; s.status = 'Session ended';
+      if (msg.slot === activeSlot) showOverlay('Session ended', true);
+      renderTabs(); loadSessions();
     });
 
     // Overlay helpers
@@ -1052,65 +1244,54 @@
 
     showOverlay('Select a session above, or start a new one', true);
 
-    // Session management
+    // Session management: a tab per live slot; past sessions open in a new slot.
     function startNew() {
-      if (termActive) {
-        if (!confirm('End current session and start a new one?')) return;
-        socket.emit('pty_input', { data: '\x03' }); // ctrl-c
-      }
-      term.clear();
-      term.reset();
-      activeSessionId = null;
-      highlightSession(null);
-      showOverlay('Preparing...');
-      socket.emit('start_terminal', { repo: REPO, number: NUMBER, type: CATEGORY, session_id: null });
+      const s = createSlot(null, `new session ${slotSeq}`);
+      showSlot(s.id);
+      socket.emit('start_terminal', { repo: REPO, number: NUMBER, type: CATEGORY, slot: s.id, session_id: null, rows: s.term.rows, cols: s.term.cols });
+    }
+    function resumeSession(sessionId, label) {
+      const open = Object.values(slots).find(s => s.sessionId === sessionId && !s.ended);
+      if (open) { showSlot(open.id); return; }
+      const s = createSlot(sessionId, label || 'resumed');
+      s.status = 'Resuming session…';
+      showSlot(s.id);
+      socket.emit('start_terminal', { repo: REPO, number: NUMBER, type: CATEGORY, slot: s.id, session_id: sessionId, rows: s.term.rows, cols: s.term.cols });
+    }
+    let pastSessions = [];
+    // Past sessions are history files on disk; × just hides one here, nothing is deleted.
+    const HIDE_KEY = `terminal.hidden.${REPO}#${NUMBER}`;
+    function hiddenSessions() { try { return new Set(JSON.parse(localStorage.getItem(HIDE_KEY) || '[]')); } catch (e) { return new Set(); } }
+    function hideSession(id, ev) { ev?.stopPropagation(); const h = hiddenSessions(); h.add(id); try { localStorage.setItem(HIDE_KEY, JSON.stringify([...h])); } catch (e) {} renderTabs(); }
+    function unhideSessions() { try { localStorage.removeItem(HIDE_KEY); } catch (e) {} renderTabs(); }
+    function renderTabs() {
+      const list = document.getElementById('session-list');
+      const openIds = new Set(Object.values(slots).map(s => s.sessionId).filter(Boolean));
+      const live = Object.values(slots).map(s => `
+        <div class="session-item ${s.id === activeSlot ? 'active' : ''} ${s.ended ? 'ended' : s.ready ? '' : 'starting'}" title="${escapeHtml(s.status || '')}" onclick="showSlot('${s.id}')">
+          <span class="dot"></span><span class="label">${escapeHtml(s.label)}</span><span class="x" title="Close tab" onclick="closeSlot('${s.id}', event)">×</span>
+        </div>`).join('');
+      const hidden = hiddenSessions();
+      const visible = pastSessions.filter(p => !openIds.has(p.session_id) && !hidden.has(p.session_id));
+      const nHidden = pastSessions.filter(p => hidden.has(p.session_id)).length;
+      const past = visible.map(p => {
+        const label = p.slug || p.first_prompt || 'session';
+        const tip = [p.first_prompt, p.git_branch ? `branch: ${p.git_branch}` : '', formatTime(p.started_at)].filter(Boolean).join('\n');
+        return `<div class="session-item past" title="${escapeHtml(tip)}" onclick="resumeSession('${escapeHtml(p.session_id)}', '${escapeHtml(label.replace(/'/g, ''))}')">
+          <span class="label">↻ ${escapeHtml(label)}</span><span class="when">${escapeHtml(formatTime(p.started_at))}</span><span class="x" title="Hide from this list" onclick="hideSession('${escapeHtml(p.session_id)}', event)">×</span></div>`;
+      }).join('');
+      const unhide = nHidden ? `<span class="no-sessions" style="cursor:pointer" title="Show hidden sessions" onclick="unhideSessions()">${nHidden} hidden</span>` : '';
+      list.innerHTML = (live + past + unhide) || '<span class="no-sessions">No previous sessions</span>';
     }
 
-    function resumeSession(sessionId) {
-      if (termActive) {
-        if (!confirm('End current session and resume this one?')) return;
-      }
-      term.clear();
-      term.reset();
-      activeSessionId = sessionId;
-      highlightSession(sessionId);
-      showOverlay('Resuming session...');
-      socket.emit('start_terminal', { repo: REPO, number: NUMBER, type: CATEGORY, session_id: sessionId });
-    }
-
-    function highlightSession(sessionId) {
-      document.querySelectorAll('.session-item').forEach(el => {
-        el.classList.toggle('active', el.dataset.sessionId === sessionId);
-      });
-    }
-
-    // Load session list
+    // Load past sessions (from ~/.claude/projects) and redraw the tab strip.
     async function loadSessions() {
       try {
         const res = await fetch(`/api/sessions?repo=${encodeURIComponent(REPO)}&number=${NUMBER}&type=${CATEGORY}`);
         const data = await res.json();
-        const list = document.getElementById('session-list');
-
-        if (data.sessions.length === 0) {
-          list.innerHTML = '<span class="no-sessions">No previous sessions</span>';
-          return;
-        }
-
-        list.innerHTML = data.sessions.map(s => {
-          const label = s.slug || s.first_prompt || 'session';
-          const tip = [s.first_prompt, s.git_branch ? `branch: ${s.git_branch}` : '', formatTime(s.started_at)].filter(Boolean).join('\n');
-          return `
-          <div class="session-item${s.session_id === activeSessionId ? ' active' : ''}"
-               data-session-id="${escapeHtml(s.session_id)}"
-               title="${escapeHtml(tip)}"
-               onclick="resumeSession('${escapeHtml(s.session_id)}')">
-            <span class="label">${escapeHtml(label)}</span>
-            <span class="when">${escapeHtml(formatTime(s.started_at))}</span>
-          </div>`;
-        }).join('');
-      } catch (e) {
-        document.getElementById('session-list').innerHTML = '<span class="no-sessions">Failed to load sessions</span>';
-      }
+        pastSessions = data.sessions || [];
+      } catch (e) { pastSessions = []; }
+      renderTabs();
     }
 
     function escapeHtml(str) {
@@ -1128,7 +1309,7 @@
 
     // Warn before closing active session
     window.addEventListener('beforeunload', e => {
-      if (termActive) {
+      if (Object.values(slots).some(s => s.ready)) {
         e.preventDefault();
         e.returnValue = '';
       }
