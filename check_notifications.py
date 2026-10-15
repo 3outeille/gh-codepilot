@@ -10,6 +10,7 @@ Data files:
 
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -131,72 +132,248 @@ def _compute_ci_status(checks):
     return "success"
 
 
+def gh_user():
+    """Current authenticated GitHub login, cached per process."""
+    global _GH_USER
+    if _GH_USER is None:
+        result = subprocess.run(["gh", "api", "user", "-q", ".login"],
+                                capture_output=True, text=True)
+        _GH_USER = result.stdout.strip() if result.returncode == 0 else ""
+    return _GH_USER
+
+
+_GH_USER = None
+
+# Relation precedence: an item you authored outranks a review request,
+# which outranks a plain mention.
+_RELATION_RANK = {"mine": 3, "review_requested": 2, "mentioned": 1}
+
+# isDraft exists on `gh search prs` only; passing it to `gh search issues`
+# makes the whole query fail.
+_SEARCH_FIELDS = {
+    "prs": "number,title,url,author,createdAt,repository,isDraft",
+    "issues": "number,title,url,author,createdAt,repository",
+}
+
+
+def _search(kind, qualifier, repos):
+    """Run `gh search <kind> --<qualifier> @me` scoped to the watched repos."""
+    args = ["search", kind, f"--{qualifier}", "@me", "--state", "open",
+            "--json", _SEARCH_FIELDS[kind], "--limit", "100"]
+    for repo in repos:
+        args += ["--repo", repo]
+    return gh_cli(args)
+
+
+def _enrich_pr(repo, number):
+    """Fetch review decision + CI rollup for a single PR."""
+    data = gh_cli(["pr", "view", str(number), "--repo", repo,
+                   "--json", "reviewDecision,isDraft,statusCheckRollup,author,"
+                             "additions,deletions,changedFiles,latestReviews,"
+                             "reviews,comments,commits"])
+    if data is None:
+        return {}
+    author = (data.get("author") or {}).get("login", "")
+    # One entry per reviewer, latest state only.
+    latest = data.get("latestReviews") or []
+    approvals = sum(1 for r in latest if r.get("state") == "APPROVED")
+
+    # "Who spoke last": a reviewer's comment after the author's last reply or
+    # push means the ball is in the author's court, whatever reviewDecision says.
+    def is_human(login):
+        return login and not login.endswith("[bot]") and login not in ("github-actions", "HuggingFaceDocBuilderDev")
+
+    reviewer_at, author_at, reviewers = "", "", set()
+    for r in data.get("reviews") or []:
+        who, at = (r.get("author") or {}).get("login", ""), r.get("submittedAt") or ""
+        if who == author:
+            author_at = max(author_at, at)
+        elif is_human(who):
+            reviewer_at = max(reviewer_at, at); reviewers.add(who)
+    for c in data.get("comments") or []:
+        who, at = (c.get("author") or {}).get("login", ""), c.get("createdAt") or ""
+        if who == author:
+            author_at = max(author_at, at)
+        elif is_human(who):
+            reviewer_at = max(reviewer_at, at)
+    for c in data.get("commits") or []:
+        author_at = max(author_at, c.get("committedDate") or "")
+
+    rollup = data.get("statusCheckRollup") or []
+    failing = []
+    for c in rollup:
+        state = (c.get("conclusion") or c.get("state") or "").upper()
+        if state in ("FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED"):
+            failing.append({
+                "name": c.get("name") or c.get("context") or "",
+                "workflow": c.get("workflowName") or "",
+                "url": c.get("detailsUrl") or c.get("targetUrl") or "",
+            })
+    # The umbrella "status" job just mirrors the others; list real jobs first.
+    failing.sort(key=lambda f: ("status" in f["name"].lower(), f["name"]))
+
+    return {
+        "review_decision": data.get("reviewDecision") or "",
+        "is_draft": data.get("isDraft", False),
+        "ci_status": _compute_ci_status(rollup),
+        "failing_checks": failing[:8],
+        "lines_changed": (data.get("additions") or 0) + (data.get("deletions") or 0),
+        "changed_files": data.get("changedFiles") or 0,
+        "reviewer_count": len(latest),
+        "approval_count": approvals,
+        "reviewed_by": sorted(reviewers),
+        "last_reviewer_at": reviewer_at,
+        "last_author_at": author_at,
+    }
+
+
+def _mention_snippet(repo, number):
+    """Latest comment that @-mentions you on this item: {snippet, author, at}."""
+    login = gh_user()
+    if not login:
+        return {}
+    needle = f"@{login}".lower()
+    best = None
+
+    def consider(body, user, at):
+        nonlocal best
+        if body and needle in body.lower() and (best is None or at > best["mention_at"]):
+            best = {
+                "mention_snippet": " ".join(body.split())[:160],
+                "mention_by": (user or {}).get("login", ""),
+                "mention_at": at,
+            }
+
+    # The opening description counts as a mention too (issues endpoint covers PRs).
+    item = gh_api(f"/repos/{repo}/issues/{number}") or {}
+    consider(item.get("body"), item.get("user"), item.get("created_at", ""))
+
+    for endpoint in (f"/repos/{repo}/issues/{number}/comments?per_page=100",
+                     f"/repos/{repo}/pulls/{number}/comments?per_page=100",
+                     f"/repos/{repo}/pulls/{number}/reviews?per_page=100"):
+        for c in gh_api(endpoint) or []:
+            consider(c.get("body"), c.get("user"),
+                     c.get("created_at") or c.get("submitted_at", ""))
+    return best or {}
+
+
+def _collect(kind, qualifiers, repos):
+    """Merge several searches into {key: item}, keeping the strongest relation."""
+    merged = {}
+    fetched_any = False
+    for qualifier, relation in qualifiers:
+        results = _search(kind, qualifier, repos)
+        if results is None:
+            continue
+        fetched_any = True
+        for r in results:
+            repo = r.get("repository", {}).get("nameWithOwner", "")
+            if not repo:
+                continue
+            key = f"{repo}#{r['number']}"
+            existing = merged.get(key)
+            if existing and _RELATION_RANK[existing["relation"]] >= _RELATION_RANK[relation]:
+                continue
+            merged[key] = {
+                "repo": repo, "number": r["number"], "title": r["title"],
+                "url": r["url"], "author": r.get("author", {}).get("login", ""),
+                "created_at": r.get("createdAt", ""),
+                "is_draft": r.get("isDraft", False),
+                "relation": relation,
+            }
+    return merged, fetched_any
+
+
 def sync_open_items(repos):
-    """Fetch all open PRs and issues. Notify on newly appeared ones."""
+    """
+    Fetch the current user's open PRs and issues across all of GitHub.
+
+    Three PR buckets, merged by strongest relation:
+      mine              — you opened it
+      review_requested  — your review is requested
+      mentioned         — you were @-mentioned
+
+    Scoped to the repos listed in repos.conf.
+    """
     prev = load_open_items()
     prev_pr_keys = set(prev.get("prs", {}).keys())
     prev_issue_keys = set(prev.get("issues", {}).keys())
     is_first_run = not ITEMS_FILE.exists() or ITEMS_FILE.stat().st_size == 0
 
-    current = {"prs": {}, "issues": {}}
-    fetched_any = False
+    prs, prs_ok = _collect("prs", [
+        ("mentions", "mentioned"),
+        ("review-requested", "review_requested"),
+        ("author", "mine"),
+    ], repos)
+    issues, issues_ok = _collect("issues", [
+        ("mentions", "mentioned"),
+        ("author", "mine"),
+    ], repos)
 
-    for repo in repos:
-        prs = gh_cli(["pr", "list", "--repo", repo, "--state", "open",
-                       "--json", "number,title,url,author,createdAt,reviewDecision,isDraft,statusCheckRollup",
-                       "--limit", "100"])
-        if prs is not None:
-            fetched_any = True
-            for pr in prs:
-                key = f"{repo}#{pr['number']}"
-                author = pr.get("author", {}).get("login", "")
-                checks = pr.get("statusCheckRollup") or []
-                ci_status = _compute_ci_status(checks)
-                current["prs"][key] = {
-                    "repo": repo, "number": pr["number"], "title": pr["title"],
-                    "url": pr["url"], "author": author,
-                    "created_at": pr.get("createdAt", ""),
-                    "review_decision": pr.get("reviewDecision", ""),
-                    "is_draft": pr.get("isDraft", False),
-                    "ci_status": ci_status,
-                }
-                if key not in prev_pr_keys:
-                    if not is_first_run:
-                        desktop_notify(
-                            f"New PR in {repo}",
-                            f"#{pr['number']}: {pr['title']}\nby {author}\n{pr['url']}",
-                        )
-                    log_event("new_pr", "pr", repo, pr["number"], pr["title"],
-                              author, pr["url"], "Pull request opened",
-                              timestamp=pr.get("createdAt", ""))
+    # Review decision, CI, and mention snippets each need per-item calls;
+    # run them concurrently.
+    jobs = []
+    for key, item in prs.items():
+        jobs.append((prs, key, _enrich_pr, (item["repo"], item["number"])))
+        if item["relation"] == "mentioned":
+            jobs.append((prs, key, _mention_snippet, (item["repo"], item["number"])))
+    for key, item in issues.items():
+        if item["relation"] == "mentioned":
+            jobs.append((issues, key, _mention_snippet, (item["repo"], item["number"])))
 
-        issues = gh_cli(["issue", "list", "--repo", repo, "--state", "open",
-                          "--json", "number,title,url,author,createdAt", "--limit", "100"])
-        if issues is not None:
-            fetched_any = True
-            for issue in issues:
-                key = f"{repo}#{issue['number']}"
-                author = issue.get("author", {}).get("login", "")
-                current["issues"][key] = {
-                    "repo": repo, "number": issue["number"], "title": issue["title"],
-                    "url": issue["url"], "author": author,
-                    "created_at": issue.get("createdAt", ""),
-                }
-                if key not in prev_issue_keys:
-                    if not is_first_run:
-                        desktop_notify(
-                            f"New issue in {repo}",
-                            f"#{issue['number']}: {issue['title']}\nby {author}\n{issue['url']}",
-                        )
-                    log_event("new_issue", "issue", repo, issue["number"], issue["title"],
-                              author, issue["url"], "Issue opened",
-                          timestamp=issue.get("createdAt", ""))
+    if jobs:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = {pool.submit(fn, *args): (bucket, key)
+                       for bucket, key, fn, args in jobs}
+            for future in as_completed(futures):
+                bucket, key = futures[future]
+                try:
+                    bucket[key].update(future.result())
+                except Exception:
+                    pass
 
-    if fetched_any:
+    current = {"prs": prs, "issues": issues}
+
+    if not is_first_run:
+        for key, pr in prs.items():
+            if key not in prev_pr_keys:
+                desktop_notify(
+                    f"PR ({pr['relation'].replace('_', ' ')}) in {pr['repo']}",
+                    f"#{pr['number']}: {pr['title']}\nby {pr['author']}\n{pr['url']}",
+                )
+        for key, issue in issues.items():
+            if key not in prev_issue_keys:
+                desktop_notify(
+                    f"Issue ({issue['relation']}) in {issue['repo']}",
+                    f"#{issue['number']}: {issue['title']}\nby {issue['author']}\n{issue['url']}",
+                )
+
+    for key, pr in prs.items():
+        if key not in prev_pr_keys:
+            log_event("new_pr", "pr", pr["repo"], pr["number"], pr["title"],
+                      pr["author"], pr["url"], "Pull request opened",
+                      timestamp=pr.get("created_at", ""))
+    for key, issue in issues.items():
+        if key not in prev_issue_keys:
+            log_event("new_issue", "issue", issue["repo"], issue["number"],
+                      issue["title"], issue["author"], issue["url"], "Issue opened",
+                      timestamp=issue.get("created_at", ""))
+
+    if prs_ok or issues_ok:
         save_open_items(current)
     else:
         current = prev
     return current
+
+
+def repos_from_items(open_items):
+    """Repos that actually contain one of your items — used to scope the event feed."""
+    repos = set()
+    for section in ("prs", "issues"):
+        for item in open_items.get(section, {}).values():
+            repos.add(item["repo"])
+    return sorted(repos)
+
 
 
 # ── Repo Events API ──────────────────────────────────────────────────────────
@@ -312,6 +489,11 @@ def process_repo_events(repos, open_items, state, is_first_run=False):
                 seen[event_id] = created_at
                 continue
 
+            # Only surface activity on items that are yours
+            if (repo, number) not in all_items:
+                seen[event_id] = created_at
+                continue
+
             # Look up title from open items if missing
             if not title:
                 item = all_items.get((repo, number))
@@ -360,18 +542,24 @@ def prune_events():
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
+    if not gh_user():
+        print("Error: could not resolve GitHub user. Run: gh auth login")
+        return
+
     repos = load_repos()
     if not repos:
+        print(f"Error: no repos in {REPOS_FILE}. Add one `owner/repo` per line.")
         return
 
     state = load_state()
     is_first_run = not ITEMS_FILE.exists() or ITEMS_FILE.stat().st_size == 0
 
-    # 1. Sync all open PRs/issues
+    # 1. Sync your open PRs/issues (authored, mentioned, review-requested)
     open_items = sync_open_items(repos)
 
-    # 2. Fetch activity from repo events API (all users, correct timestamps)
-    process_repo_events(repos, open_items, state, is_first_run=is_first_run)
+    # 2. Activity feed, scoped to the repos your items live in
+    process_repo_events(repos_from_items(open_items), open_items, state,
+                        is_first_run=is_first_run)
     save_state(state)
 
     # 3. Prune old events

@@ -8,42 +8,295 @@
   <link rel="icon" type="image/png" href="/static/icon-192.png">
   <title>Claude Code — {{ repo }}#{{ number }}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/css/diff2html.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #e6edf3; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-    .topbar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #21262d; background: #161b22; flex-shrink: 0; }
+    .topbar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid #21262d; background: #161b22; flex-shrink: 0; }
     .topbar a { color: #58a6ff; text-decoration: none; font-size: 13px; }
     .topbar a:hover { text-decoration: underline; }
-    .topbar .title { font-size: 14px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .topbar .title { font-size: 13px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .topbar .type-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: #238636; color: #fff; }
     .topbar .type-badge.issue { background: #a371f7; }
 
     .main { display: flex; flex: 1; overflow: hidden; }
 
-    /* Sidebar */
-    .sidebar { width: 280px; border-right: 1px solid #21262d; background: #161b22; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
-    .sidebar-header { padding: 12px 14px; border-bottom: 1px solid #21262d; font-size: 13px; font-weight: 600; color: #8b949e; display: flex; justify-content: space-between; align-items: center; }
-    .new-session-btn { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-weight: 500; }
+    /* Session tabs (top of the terminal strip) */
+    .session-tabs { display: flex; align-items: stretch; gap: 4px; padding: 4px 6px 0; background: #161b22; border-bottom: 1px solid #21262d; flex-shrink: 0; overflow: hidden; }
+    .new-session-btn { background: #238636; color: #fff; border: none; border-radius: 6px 6px 0 0; padding: 0 10px; font-size: 11px; cursor: pointer; font-weight: 600; flex-shrink: 0; height: 26px; align-self: flex-end; margin-bottom: -1px; }
     .new-session-btn:hover { background: #2ea043; }
-    .session-list { flex: 1; overflow-y: auto; }
-    .session-item { padding: 10px 14px; border-bottom: 1px solid #1b2028; cursor: pointer; transition: background 0.1s; }
-    .session-item:hover { background: #1c2129; }
-    .session-item.active { background: #1c2129; border-left: 3px solid #58a6ff; }
-    .session-slug { font-size: 12px; color: #58a6ff; margin-bottom: 3px; }
-    .session-prompt { font-size: 12px; color: #8b949e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px; }
-    .session-meta { font-size: 11px; color: #484f58; margin-top: 4px; }
-    .session-branch { font-size: 11px; color: #d29922; }
-    .no-sessions { padding: 20px 14px; color: #484f58; font-size: 13px; text-align: center; }
+    .session-list { display: flex; gap: 2px; overflow-x: auto; overflow-y: hidden; flex: 1; scrollbar-width: thin; }
+    .session-item { display: flex; align-items: center; gap: 6px; padding: 0 10px; height: 26px; max-width: 220px; min-width: 90px; font-size: 11px; color: #8b949e; background: #0d1117; border: 1px solid #21262d; border-bottom: none; border-radius: 6px 6px 0 0; cursor: pointer; white-space: nowrap; flex-shrink: 0; margin-bottom: -1px; }
+    .session-item:hover { color: #e6edf3; background: #1c2129; }
+    .session-item.active { color: #e6edf3; background: #0d1117; border-color: #30363d; border-top: 2px solid #58a6ff; }
+    .session-item .label { overflow: hidden; text-overflow: ellipsis; }
+    .session-item .when { color: #484f58; font-size: 10px; flex-shrink: 0; }
+    .no-sessions { color: #484f58; font-size: 11px; align-self: center; padding: 0 6px; }
 
     /* Terminal area */
-    .terminal-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+    .terminal-area { display: flex; flex-direction: column; overflow: hidden; position: relative; }
     #terminal { flex: 1; }
-    .terminal-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(13,17,23,0.9); z-index: 10; flex-direction: column; gap: 8px; }
-    .terminal-overlay .status { font-size: 14px; color: #8b949e; }
+    .terminal-overlay { position: absolute; inset: 31px 0 0 0; display: flex; align-items: center; justify-content: center; background: rgba(13,17,23,0.9); z-index: 10; flex-direction: column; gap: 8px; }
+    .terminal-overlay .status { font-size: 13px; color: #8b949e; }
+    .terminal-overlay .overlay-new { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 6px 16px; font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 4px; }
+    .terminal-overlay .overlay-new:hover { background: #2ea043; }
     .terminal-overlay .spinner { width: 24px; height: 24px; border: 3px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .hidden { display: none; }
+
+    /* Diff pane */
+    .topbar .toggle { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+    .topbar .toggle.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+    .workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+    .splitter { height: 5px; cursor: row-resize; background: #21262d; flex-shrink: 0; }
+    .splitter:hover, .splitter.dragging { background: #58a6ff; }
+    .diff-pane { flex: 1; min-height: 120px; display: flex; flex-direction: column; background: #0d1117; overflow: hidden; }
+    .diff-pane.hidden, .splitter.hidden { display: none; }
+    .workspace .terminal-area { flex: none; height: 38%; min-height: 120px; }
+    .diff-pane.hidden ~ .terminal-area { flex: 1; height: auto; }
+    .diff-toolbar { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-bottom: 1px solid #21262d; background: #161b22; font-size: 12px; flex-shrink: 0; flex-wrap: wrap; }
+    .diff-toolbar .seg { display: flex; border: 1px solid #30363d; border-radius: 6px; overflow: hidden; }
+    .diff-toolbar .seg button { background: #0d1117; color: #8b949e; border: none; padding: 3px 8px; font-size: 11px; cursor: pointer; }
+    .diff-toolbar .seg button.on { background: #21262d; color: #e6edf3; }
+    .diff-toolbar .spacer { flex: 1; }
+    .diff-toolbar .stat { color: #8b949e; }
+    .diff-toolbar .stat b.add { color: #3fb950; } .diff-toolbar .stat b.del { color: #f85149; }
+    .diff-toolbar .refresh { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+    .diff-body { flex: 1; overflow: auto; }
+    .diff-empty { color: #484f58; font-size: 13px; text-align: center; padding: 40px 16px; }
+
+    /* diff2html: size + a plain table layout. Its default gutter is an
+       absolutely-positioned cell that drifts once rows change height
+       (comment threads), so make the gutter a real column instead. */
+    .d2h-wrapper .d2h-diff-table { font-size: 11.5px; line-height: 18px; }
+    .d2h-diff-table td { padding: 0; }
+    .d2h-code-linenumber, .d2h-code-side-linenumber { position: static; display: table-cell; width: 1%; white-space: nowrap; padding: 0 6px; direction: ltr; }
+    .d2h-code-linenumber .line-num1, .d2h-code-linenumber .line-num2 { float: none; display: inline-block; width: 3.2em; text-align: right; padding: 0; }
+    .d2h-code-line, .d2h-code-side-line { padding: 0 8px 0 4px; width: auto; display: block; }
+    .d2h-code-line-ctn { width: auto; vertical-align: baseline; }
+    .d2h-code-line del, .d2h-code-line ins, .d2h-code-side-line del, .d2h-code-side-line ins { display: inline; margin: 0; padding: 0 1px; }
+    .d2h-file-wrapper { border-radius: 6px; margin: 6px; }
+    .d2h-file-header { height: auto; padding: 4px 8px; position: sticky; top: 0; z-index: 2; }
+    .d2h-file-name-wrapper { font-size: 12px; }
+    .d2h-file-stats { font-size: 11px; }
+    .d2h-file-list-wrapper { margin: 6px; font-size: 11px; }
+    .d2h-file-list > li { padding: 3px 8px; }
+    .d2h-code-line-ctn.hljs, .d2h-code-line-ctn .hljs { background: transparent; padding: 0; }
+
+    /* View tabs + panels */
+    .view-tabs { display: flex; gap: 2px; margin-right: 8px; }
+    .view-tabs button { background: transparent; color: #8b949e; border: none; border-bottom: 2px solid transparent; padding: 4px 9px; font-size: 11.5px; cursor: pointer; }
+    .view-tabs button:hover { color: #e6edf3; }
+    .view-tabs button.on { color: #e6edf3; border-bottom-color: #f78166; }
+    .view-tabs .n { background: #30363d; color: #c9d1d9; font-size: 10px; padding: 0 5px; border-radius: 8px; margin-left: 4px; }
+    .view-tabs .n.bad { background: #da3633; color: #fff; }
+    .diff-only { display: contents; }
+    .diff-pane:not([data-view="diff"]) .diff-only { display: none; }
+    .panel { flex: 1; overflow: auto; display: none; }
+    .panel.on { display: block; }
+    .panel-empty { color: #484f58; font-size: 12px; text-align: center; padding: 30px 16px; }
+    .panel-err { color: #f85149; font-size: 12px; padding: 12px 16px; }
+    .md { font-size: 12.5px; line-height: 1.5; color: #c9d1d9; }
+    .md p { margin: 0 0 8px; } .md h1, .md h2, .md h3 { margin: 12px 0 6px; font-size: 13px; color: #e6edf3; }
+    .md code { background: #161b22; border: 1px solid #21262d; border-radius: 3px; padding: 0 3px; font-size: 11.5px; }
+    .md pre { background: #161b22; border: 1px solid #21262d; border-radius: 4px; padding: 8px; overflow-x: auto; margin: 6px 0; }
+    .md pre code { border: none; padding: 0; } .md a { color: #58a6ff; } .md ul, .md ol { padding-left: 20px; margin: 4px 0; }
+    .md blockquote { border-left: 3px solid #30363d; margin: 4px 0; padding-left: 8px; color: #8b949e; }
+    .md table { border-collapse: collapse; } .md td, .md th { border: 1px solid #30363d; padding: 2px 6px; }
+
+    /* Conversation */
+    .conv { padding: 8px; max-width: 900px; }
+    .conv-item { border: 1px solid #30363d; border-radius: 6px; background: #161b22; margin-bottom: 8px; }
+    .conv-head { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid #21262d; font-size: 11px; color: #8b949e; }
+    .conv-head b { color: #e6edf3; }
+    .conv-head .st { font-size: 9.5px; padding: 0 6px; border-radius: 8px; border: 1px solid #30363d; }
+    .conv-head .st.APPROVED { color: #3fb950; border-color: #238636; } .conv-head .st.CHANGES_REQUESTED { color: #f85149; border-color: #da3633; }
+    .conv-head a { margin-left: auto; color: #8b949e; text-decoration: none; } .conv-head a:hover { color: #58a6ff; }
+    .conv-body { padding: 8px 10px; }
+    .conv-item.body { border-color: #1f6feb; }
+
+    /* Checks */
+    .checks { padding: 8px; }
+    .chk-group h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #8b949e; margin: 8px 2px 4px; }
+    .chk { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid #21262d; border-radius: 4px; background: #161b22; margin-bottom: 3px; font-size: 11.5px; }
+    .chk .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .chk.fail .dot { background: #f85149; } .chk.pass .dot { background: #3fb950; } .chk.pending .dot { background: #d29922; } .chk.skipping .dot, .chk.cancel .dot { background: #484f58; }
+    .chk .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9d1d9; }
+    .chk .wf { color: #8b949e; font-size: 10px; }
+    .chk a, .chk button { font-size: 10.5px; padding: 1px 7px; border-radius: 4px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; cursor: pointer; text-decoration: none; }
+    .chk button:hover, .chk a:hover { background: #30363d; }
+    .chk-log { background: #0d1117; border: 1px solid #30363d; border-radius: 4px; margin: -1px 0 6px; padding: 8px; font-family: Menlo, Consolas, monospace; font-size: 10.5px; line-height: 1.4; white-space: pre-wrap; max-height: 420px; overflow: auto; color: #c9d1d9; }
+    .chk-log .hl { color: #f85149; font-weight: 600; }
+    .chk-more { font-size: 11px; color: #8b949e; cursor: pointer; padding: 4px 8px; } .chk-more:hover { color: #e6edf3; }
+
+    /* Pre-review */
+    .review { padding: 10px 14px; max-width: 900px; }
+    .review-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 11.5px; color: #8b949e; }
+    .review-bar button { background: #8957e5; color: #fff; border: none; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .review-bar button:disabled { opacity: .6; cursor: wait; }
+    .review-bar button.sec { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; font-weight: 500; }
+
+    /* Expand context + view file */
+    .xp-row td { padding: 0 !important; }
+    .xp { display: flex; gap: 10px; align-items: center; background: #0d1117; border-top: 1px dashed #30363d; border-bottom: 1px dashed #30363d; padding: 1px 8px; font-size: 10.5px; color: #58a6ff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .xp span { cursor: pointer; } .xp span:hover { text-decoration: underline; }
+    .xp .muted { color: #484f58; cursor: default; } .xp .muted:hover { text-decoration: none; }
+    .d2h-file-header .viewfile { margin-left: 8px; font-size: 10.5px; color: #58a6ff; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .d2h-file-header .viewfile:hover { text-decoration: underline; }
+    #fileview { position: fixed; top: 0; right: 0; bottom: 0; width: min(900px, 70vw); background: #0d1117; border-left: 1px solid #30363d; box-shadow: -8px 0 24px rgba(0,0,0,.5); z-index: 60; display: none; flex-direction: column; }
+    #fileview.on { display: flex; }
+    .fv-head { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid #21262d; background: #161b22; font-size: 12px; }
+    .fv-head .path { flex: 1; font-family: Menlo, monospace; color: #e6edf3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fv-head button { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 11px; }
+    .fv-body { flex: 1; overflow: auto; font-family: Menlo, Consolas, monospace; font-size: 11.5px; line-height: 18px; }
+    .fv-body table { border-collapse: collapse; width: 100%; }
+    .fv-body td { padding: 0; vertical-align: top; }
+    .fv-body td.ln { width: 1%; color: #6e7681; text-align: right; padding: 0 10px 0 12px; user-select: none; cursor: pointer; white-space: nowrap; }
+    .fv-body td.ln:hover { color: #58a6ff; }
+    .fv-body td.cd { white-space: pre; padding-right: 12px; }
+    .fv-body tr.hit td { background: rgba(56,139,253,.15); }
+
+    /* Why popover + symbol lookup */
+    .pop { position: fixed; z-index: 70; background: #161b22; border: 1px solid #30363d; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.5); max-width: 560px; max-height: 60vh; overflow: auto; display: none; }
+    .pop.on { display: block; }
+    .pop-head { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid #21262d; font-size: 11px; color: #8b949e; position: sticky; top: 0; background: #161b22; }
+    .pop-head b { color: #e6edf3; font-family: Menlo, monospace; }
+    .pop-head button { margin-left: auto; background: none; border: none; color: #8b949e; cursor: pointer; font-size: 13px; }
+    .pop pre { margin: 0; padding: 8px 10px; font-size: 10.5px; line-height: 1.45; white-space: pre-wrap; color: #c9d1d9; font-family: Menlo, Consolas, monospace; }
+    .pop .wait { padding: 12px; color: #8b949e; font-size: 11.5px; }
+    .d2h-code-linenumber .line-num2, .d2h-code-side-linenumber { cursor: pointer; }
+    .d2h-code-linenumber .line-num2:hover, .d2h-code-side-linenumber:hover { color: #58a6ff; text-decoration: underline; }
+    #selpill { position: fixed; z-index: 70; display: none; align-items: center; gap: 4px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 3px 4px 3px 8px; box-shadow: 0 4px 14px rgba(0,0,0,.5); font-size: 11px; }
+    #selpill.on { display: flex; }
+    #selpill .q { font-family: Menlo, monospace; color: #8b949e; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #selpill button { background: #1f6feb; color: #fff; border: none; border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer; }
+    #selpill button + button { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+    #selpill button:hover { filter: brightness(1.15); }
+    #cpanel[data-rp="lookup"] .rp-comments { display: none !important; }
+    #cpanel[data-rp="lookup"] .rp-lookup { display: block !important; }
+    .lk-q { font-family: Menlo, monospace; font-size: 11px; color: #e6edf3; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; white-space: pre-wrap; max-height: 90px; overflow: auto; }
+    .lk-sec { margin-bottom: 12px; }
+    .lk-sec h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #8b949e; margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+    .lk-sec h4 .more { margin-left: auto; font-weight: 400; text-transform: none; color: #58a6ff; cursor: pointer; }
+    .lk-hit { display: flex; gap: 8px; font-family: Menlo, monospace; font-size: 11px; padding: 2px 0; cursor: pointer; color: #c9d1d9; border-bottom: 1px solid #161b22; }
+    .lk-hit:hover { color: #58a6ff; }
+    .lk-hit .p { color: #8b949e; flex-shrink: 0; max-width: 46%; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+    .lk-hit .t { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+    .lk-pre { font-family: Menlo, Consolas, monospace; font-size: 10.5px; line-height: 1.45; white-space: pre-wrap; color: #c9d1d9; background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 8px; }
+    .lk-wait { color: #8b949e; font-size: 11.5px; padding: 6px 0; }
+    .lk-sec.all .lk-more-rows { display: block !important; }
+    .rc-thread.resolved .rc-comment:not(:first-child) { display: none; }
+    .rc-thread.resolved .rc-body { display: none; }
+    .rc-thread.resolved.open .rc-comment, .rc-thread.resolved.open .rc-body { display: block; }
+    .rc-resolved { font-size: 10px; color: #3fb950; cursor: pointer; margin-left: auto; }
+    .rc-resolved:hover { text-decoration: underline; }
+
+    /* Diff layout: file tree | diff | comments panel */
+    #diff-body.panel.on { display: flex; overflow: hidden; }
+    #filetree { width: 230px; flex-shrink: 0; border-right: 1px solid #21262d; background: #0d1117; overflow: auto; font-size: 11.5px; padding: 6px 4px; }
+    #filetree.hidden { display: none; }
+    #diff-scroll { flex: 1; overflow: auto; min-width: 0; }
+    #cpanel { width: 380px; flex-shrink: 0; border-left: 1px solid #30363d; background: #0d1117; display: flex; flex-direction: column; overflow: hidden; }
+    #cpanel.hidden { display: none; }
+    .ft-dir, .ft-file { display: flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 4px; cursor: pointer; white-space: nowrap; color: #c9d1d9; }
+    .ft-dir:hover, .ft-file:hover { background: #161b22; }
+    .ft-dir .chev { font-size: 9px; color: #8b949e; width: 10px; transition: transform .1s; }
+    .ft-dir.closed .chev { transform: rotate(-90deg); }
+    .ft-dir.closed + .ft-children { display: none; }
+    .ft-children { padding-left: 14px; }
+    .ft-file .ic { color: #8b949e; font-size: 11px; }
+    .ft-file .nm { overflow: hidden; text-overflow: ellipsis; }
+    .ft-file .cc { margin-left: auto; font-size: 10px; color: #8b949e; display: flex; align-items: center; gap: 2px; }
+    .ft-file .cc.open { color: #d29922; }
+    .ft-file.viewed .nm { color: #484f58; text-decoration: line-through; }
+    .ft-file.current { background: #1c2129; }
+    .ft-file .ad { color: #3fb950; font-size: 10px; } .ft-file .de { color: #f85149; font-size: 10px; }
+    .cp-head { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-bottom: 1px solid #21262d; background: #161b22; font-size: 12px; }
+    .cp-head h3 { font-size: 12px; font-weight: 600; margin-right: 6px; }
+    .cp-head .seg button { padding: 2px 8px; font-size: 11px; }
+    .cp-head .x { margin-left: auto; background: none; border: none; color: #8b949e; cursor: pointer; font-size: 14px; }
+    .cp-body { flex: 1; overflow: auto; padding: 8px; }
+    .cp-thread { border: 1px solid #30363d; border-radius: 6px; background: #161b22; margin-bottom: 10px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .cp-thread.resolved { opacity: .7; }
+    .cp-thead { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-bottom: 1px solid #21262d; font-size: 11px; color: #8b949e; cursor: pointer; }
+    .cp-thead .f { font-family: Menlo, monospace; color: #e6edf3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; flex: 1; min-width: 0; }
+    .cp-thead .ln { flex-shrink: 0; }
+    .cp-thead .res { flex-shrink: 0; border: 1px solid #30363d; border-radius: 10px; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: #8b949e; background: #0d1117; }
+    .cp-thead .res.on { color: #3fb950; border-color: #238636; }
+    .cp-thead .res:hover { border-color: #58a6ff; }
+    .cp-thead a { color: #8b949e; text-decoration: none; flex-shrink: 0; } .cp-thead a:hover { color: #58a6ff; }
+    .cp-code { font-family: Menlo, Consolas, monospace; font-size: 11px; line-height: 17px; background: #0d1117; border-bottom: 1px solid #21262d; overflow-x: auto; }
+    .cp-code .l { display: flex; white-space: pre; }
+    .cp-code .l .n { width: 40px; flex-shrink: 0; text-align: right; padding-right: 8px; color: #6e7681; user-select: none; }
+    .cp-code .l .c { padding-right: 10px; }
+    .cp-code .l.anchor { background: rgba(46,160,67,.18); }
+    .cp-code .l.anchor .n { color: #3fb950; }
+    .cp-comment { padding: 7px 10px; border-bottom: 1px solid #21262d; }
+    .cp-comment .h { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #8b949e; margin-bottom: 3px; }
+    .cp-comment .h b { color: #e6edf3; }
+    .cp-comment .h .tag { font-size: 9px; border: 1px solid #30363d; border-radius: 8px; padding: 0 5px; }
+    .cp-comment .b { font-size: 12px; line-height: 1.45; color: #c9d1d9; }
+    .cp-comment .b p { margin: 0 0 4px; } .cp-comment .b code { background: #0d1117; border: 1px solid #21262d; border-radius: 3px; padding: 0 3px; font-size: 11px; }
+    .cp-comment .b pre { background: #0d1117; border: 1px solid #21262d; border-radius: 4px; padding: 6px; overflow-x: auto; margin: 4px 0; }
+    .cp-reply { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+    .cp-reply textarea { width: 100%; min-height: 34px; background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 8px; font-size: 12px; font-family: inherit; resize: vertical; }
+    .cp-reply textarea:focus { outline: none; border-color: #58a6ff; }
+    .cp-reply .row { display: none; gap: 6px; justify-content: flex-end; align-items: center; font-size: 11px; color: #8b949e; }
+    .cp-reply textarea:not(:placeholder-shown) ~ .row, .cp-reply.open .row { display: flex; }
+    .cp-reply button { font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; cursor: pointer; }
+    .cp-reply button.go { background: #238636; border-color: #238636; color: #fff; font-weight: 600; }
+    .cp-reply button.go.armed { background: #da3633; border-color: #da3633; }
+    .cp-empty { color: #484f58; font-size: 12px; text-align: center; padding: 30px 10px; }
+    .flash { animation: flash 1.6s ease-out; }
+    @keyframes flash { 0% { background: rgba(56,139,253,.35); } 100% { background: transparent; } }
+
+    /* Inline review comments */
+    .diff-toolbar .seg button.comments-toggle { display: flex; gap: 5px; align-items: center; }
+    .rc-row td { padding: 0 !important; background: #0d1117 !important; }
+    .rc-row td { height: auto !important; }
+    .rc-thread { margin: 4px 8px 6px 8px; border: 1px solid #30363d; border-radius: 6px; background: #161b22; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11.5px; line-height: 1.4; white-space: normal; max-width: 720px; }
+    .rc-comment { padding: 6px 10px; border-top: 1px solid #21262d; }
+    .rc-comment:first-child { border-top: none; }
+    .rc-head { display: flex; align-items: center; gap: 6px; color: #8b949e; margin-bottom: 3px; font-size: 11px; }
+    .rc-head b { color: #e6edf3; }
+    .rc-head .auth { font-size: 9px; padding: 0 5px; border: 1px solid #30363d; border-radius: 8px; color: #8b949e; }
+    .rc-head .outdated { font-size: 9px; padding: 0 5px; border-radius: 8px; background: #9e6a03; color: #fff; }
+    .rc-head a { color: #8b949e; text-decoration: none; margin-left: auto; }
+    .rc-head a:hover { color: #58a6ff; }
+    .rc-body { color: #c9d1d9; }
+    .rc-body p { margin: 0 0 4px; } .rc-body p:last-child { margin-bottom: 0; }
+    .rc-body code { background: #0d1117; border: 1px solid #21262d; border-radius: 3px; padding: 0 3px; font-size: 10.5px; }
+    .rc-body pre { background: #0d1117; border: 1px solid #21262d; border-radius: 4px; padding: 6px; overflow-x: auto; margin: 4px 0; }
+    .rc-body pre code { border: none; padding: 0; }
+    .rc-body a { color: #58a6ff; }
+    .rc-body ul, .rc-body ol { padding-left: 18px; margin: 3px 0; }
+    .rc-body blockquote { border-left: 3px solid #30363d; margin: 3px 0; padding-left: 8px; color: #8b949e; }
+    .rc-note { margin: 4px 8px 0 8px; font-size: 10px; color: #d29922; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .rc-marker.done { background: #238636; opacity: .7; }
+    .rc-marker { cursor: pointer; }
+    .rc-marker { display: inline-block; min-width: 14px; text-align: center; background: #1f6feb; color: #fff; border-radius: 8px; font-size: 9px; padding: 0 4px; margin-left: 4px; vertical-align: middle; }
+    .grafana-bar { padding: 8px 10px; border-bottom: 1px solid #30363d; background: #0d1117; }
+    .grafana-btn { display: inline-block; padding: 6px 12px; border-radius: 6px; background: #f46800; color: #fff; font-weight: 600; text-decoration: none; }
+    .grafana-btn:hover { background: #ff8a2a; }
+    .gf-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .gf-head h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #8b949e; margin: 0; flex: 1; }
+    .gf-head a { font-size: 10.5px; color: #f46800; text-decoration: none; }
+    .gf-head a:hover { text-decoration: underline; }
+    .gf-lane { font-size: 10.5px; color: #8b949e; margin: 6px 2px 3px; }
+    .gf-lane a { color: #8b949e; }
+    .gf-fail { border: 1px solid #3d1f22; border-radius: 4px; background: #1a1214; margin-bottom: 4px; padding: 5px 8px; font-size: 11.5px; }
+    .gf-fail .top { display: flex; align-items: center; gap: 8px; }
+    .gf-fail .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9d1d9; font-family: ui-monospace, monospace; }
+    .gf-fail .job { color: #8b949e; font-size: 10px; white-space: nowrap; }
+    .gf-fail .msg { margin-top: 3px; color: #f85149; font-family: ui-monospace, monospace; font-size: 11px; white-space: pre-wrap; word-break: break-word; }
+    .gf-fail .msg b { color: #ff7b72; font-weight: 600; }
+    .gf-fail button { font-size: 10.5px; padding: 1px 7px; border-radius: 4px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; cursor: pointer; }
+    .gf-fail button:hover { background: #30363d; }
+    .gf-fail pre.chk-log { margin: 6px 0 0; }
+    .gf-ok { color: #3fb950; font-size: 11.5px; padding: 4px 2px; }
+    .gf-muted { color: #484f58; font-size: 11px; padding: 4px 2px; }
   </style>
 </head>
 <body>
@@ -51,35 +304,86 @@
     <a href="/?tab={{ category }}">< Dashboard</a>
     <span class="type-badge {{ 'issue' if category == 'issue' else '' }}">{{ 'Issue' if category == 'issue' else 'PR' }}</span>
     <span class="title">#{{ number }} {{ title }}</span>
+    <button class="toggle on" id="diff-toggle" onclick="toggleDiffPane()">Diff</button>
   </div>
 
   <div class="main">
-    <div class="sidebar">
-      <div class="sidebar-header">
-        Sessions
-        <button class="new-session-btn" onclick="startNew()">+ New</button>
+    <div class="workspace">
+    <aside class="diff-pane" id="diff-pane" data-view="diff">
+      <div class="diff-toolbar">
+        <div class="view-tabs">
+          <button class="on" data-view="diff" onclick="setView('diff')">Diff</button>
+          {% if category == 'pr' %}
+          <button data-view="checks" onclick="setView('checks')">Checks<span class="n" id="checks-n"></span></button>
+          <button data-view="review" onclick="setView('review')">Review</button>
+          <button data-view="jobs" onclick="setView('jobs')">Jobs<span class="n" id="jobs-n"></span></button>
+          {% endif %}
+        </div>
+        <div class="diff-only">
+          <div class="seg" id="source-seg">
+            {% if category == 'pr' %}<button class="on" data-src="pr" onclick="setSource('pr')">PR diff</button>{% endif %}
+            <button class="{{ 'on' if category != 'pr' }}" data-src="local" onclick="setSource('local')">Local changes</button>
+          </div>
+          <div class="seg">
+            <button data-fmt="line-by-line" onclick="setFormat('line-by-line')">Unified</button>
+            <button class="on" data-fmt="side-by-side" onclick="setFormat('side-by-side')">Split</button>
+          </div>
+          <div class="seg"><button class="on" id="tree-toggle" onclick="toggleTree()" title="File tree">☰ files</button></div>
+          {% if category == 'pr' %}
+          <div class="seg"><button class="on" id="cpanel-toggle" onclick="toggleCpanel()" title="Comments panel">💬 <span id="comments-count">…</span></button></div>
+          {% endif %}
+        </div>
+        <span class="spacer"></span>
+        <span class="stat" id="diff-stat"></span>
+        <button class="refresh" onclick="refreshView()" title="Reload this view">↻</button>
       </div>
-      <div class="session-list" id="session-list">
-        <div class="no-sessions" id="loading-sessions">Loading sessions...</div>
+      <div class="diff-body panel on" id="diff-body">
+        <nav id="filetree"></nav>
+        <div id="diff-scroll"><div class="diff-empty">Loading diff…</div></div>
+        <aside id="cpanel">
+          <div class="cp-head">
+            <div class="view-tabs" style="margin-right:4px"><button class="on" data-rp="comments" onclick="setRpanel('comments')">Comments</button><button data-rp="lookup" onclick="setRpanel('lookup')">Lookup</button></div>
+            <div class="seg rp-comments"><button class="on" data-cf="all" onclick="setCfilter('all')">All</button><button data-cf="unresolved" onclick="setCfilter('unresolved')">Unresolved</button><button data-cf="mine" onclick="setCfilter('mine')">Mine</button></div>
+            <button class="x" onclick="toggleCpanel()">✕</button></div>
+          <div class="cp-body rp-comments" id="cp-body"><div class="cp-empty">Loading…</div></div>
+          <div class="cp-body rp-lookup" id="lk-body" style="display:none"><div class="cp-empty">Select code in the diff, then <b>Ask relore</b> or <b>Usages</b>.<br><br>An identifier searches by symbol; a longer selection is sent as a free-text query.</div></div>
+        </aside>
       </div>
-    </div>
+      <div class="panel" id="checks-body"></div>
+      <div class="panel" id="review-body"></div>
+      <div class="panel" id="jobs-body"></div>
+    </aside>
+    <div class="splitter" id="splitter"></div>
     <div class="terminal-area">
+      <div class="session-tabs">
+        <button class="new-session-btn" onclick="startNew()" title="Start a new Claude session">+ New</button>
+        <div class="session-list" id="session-list"><span class="no-sessions">Loading sessions…</span></div>
+      </div>
       <div class="terminal-overlay" id="overlay">
         <div class="spinner"></div>
         <div class="status" id="overlay-status">Select or start a session</div>
+        <button class="overlay-new" id="overlay-new" onclick="startNew()">+ New session</button>
       </div>
       <div id="terminal"></div>
     </div>
+    </div>
   </div>
 
+  <div id="fileview"><div class="fv-head"><span class="path" id="fv-path"></span><span id="fv-ref" style="color:#8b949e"></span><button onclick="closeFileView()">✕</button></div><div class="fv-body" id="fv-body"></div></div>
+  <div class="pop" id="whypop"><div class="pop-head">relore why <b id="why-loc"></b><button onclick="hideWhy()">✕</button></div><div id="why-body" class="wait">…</div></div>
+  <div id="selpill"><span class="q" id="selpill-q"></span><button onclick="lookupSelection('relore')">Ask relore</button><button onclick="lookupSelection('grep')">Usages</button></div>
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4/dist/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/js/diff2html.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/js/diff2html-ui.min.js"></script>
   <script>
     const REPO = '{{ repo }}';
     const NUMBER = {{ number }};
     const CATEGORY = '{{ category }}';
+    const ME = '{{ me }}';
 
     // Terminal setup
     const term = new Terminal({
@@ -88,7 +392,7 @@
                green: '#3fb950', yellow: '#d29922', blue: '#58a6ff',
                magenta: '#bc8cff', cyan: '#39d353', white: '#e6edf3' },
       fontFamily: '"Cascadia Code", "Fira Code", Menlo, monospace',
-      fontSize: 14,
+      fontSize: 12,
       cursorBlink: true,
     });
     const fitAddon = new FitAddon.FitAddon();
@@ -101,6 +405,596 @@
     const socket = io();
     let termActive = false;
     let activeSessionId = null;
+
+    // ── Diff pane ──
+    const diffPane = document.getElementById('diff-pane');
+    const splitter = document.getElementById('splitter');
+    const diffBody = document.getElementById('diff-body');
+    const diffStat = document.getElementById('diff-stat');
+    let diffSource = CATEGORY === 'pr' ? 'pr' : 'local';
+    let diffFormat = 'side-by-side';
+    let diffUi = null;
+    let lastDiffText = null;
+
+    function refit() {
+      fitAddon.fit();
+      if (termActive) socket.emit('resize', { rows: term.rows, cols: term.cols });
+    }
+
+    function toggleDiffPane() {
+      const hidden = diffPane.classList.toggle('hidden');
+      splitter.classList.toggle('hidden', hidden);
+      document.getElementById('diff-toggle').classList.toggle('on', !hidden);
+      try { localStorage.setItem('terminal.diffPane', hidden ? '0' : '1'); } catch (e) {}
+      requestAnimationFrame(refit);
+    }
+
+    function setSource(src) {
+      diffSource = src;
+      document.querySelectorAll('#source-seg button').forEach(b => b.classList.toggle('on', b.dataset.src === src));
+      lastDiffText = null;
+      loadDiff();
+    }
+
+    function setFormat(fmt) {
+      diffFormat = fmt;
+      document.querySelectorAll('[data-fmt]').forEach(b => b.classList.toggle('on', b.dataset.fmt === fmt));
+      try { localStorage.setItem('terminal.diffFormat', fmt); } catch (e) {}
+      if (lastDiffText !== null) renderDiff(lastDiffText);
+    }
+
+    function renderDiff(text) {
+      if (!text.trim()) {
+        document.getElementById('diff-scroll').innerHTML = `<div class="diff-empty">${diffSource === 'pr' ? 'Empty diff' : 'No uncommitted changes in the worktree yet'}</div>`;
+        diffStat.textContent = '';
+        return;
+      }
+      const files = Diff2Html.parse(text);
+      let add = 0, del = 0;
+      files.forEach(f => { add += f.addedLines; del += f.deletedLines; });
+      diffStat.innerHTML = `${files.length} file${files.length !== 1 ? 's' : ''} · <b class="add">+${add}</b> <b class="del">−${del}</b>`;
+      const scroll = document.getElementById('diff-scroll');
+      scroll.innerHTML = '';
+      const target = document.createElement('div');
+      scroll.appendChild(target);
+      diffUi = new Diff2HtmlUI(target, files, {
+        drawFileList: false, fileListToggle: false, fileListStartVisible: false,
+        matching: 'lines', outputFormat: diffFormat, highlight: true, synchronisedScroll: true,
+        colorScheme: 'dark',
+      });
+      diffUi.draw();
+      diffUi.highlightCode();
+      injectComments();
+      addExpanders();
+      buildTree(files);
+      renderCpanel();
+    }
+
+    // ── Inline review comments ──
+    let reviewComments = [];
+
+    async function loadReviewComments() {
+      if (CATEGORY !== 'pr') return;
+      let unresolved = null;
+      try {
+        const res = await fetch(`/api/review_comments?repo=${encodeURIComponent(REPO)}&number=${NUMBER}`);
+        const data = await res.json();
+        reviewComments = data.comments || [];
+        unresolved = data.unresolved;
+      } catch (e) { reviewComments = []; }
+      const el = document.getElementById('comments-count');
+      if (el) el.textContent = unresolved ?? reviewComments.length;
+    }
+
+    function timeAgo(iso) {
+      const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+      if (s < 3600) return Math.max(1, Math.floor(s / 60)) + 'm';
+      if (s < 86400) return Math.floor(s / 3600) + 'h';
+      return Math.floor(s / 86400) + 'd';
+    }
+
+    function injectComments() {
+      // Threads live in the side panel; the diff only gets a gutter marker per thread
+      // that scrolls the panel to it.
+      if (diffSource !== 'pr' || !reviewComments.length) return;
+      const wrappers = {};
+      diffBody.querySelectorAll('.d2h-file-wrapper').forEach(w => {
+        const name = w.querySelector('.d2h-file-name')?.textContent.trim();
+        if (name) wrappers[name] = w;
+      });
+      for (const root of reviewComments.filter(c => !c.reply_to)) {
+        const w = wrappers[root.path]; if (!w) continue;
+        const isRight = root.side !== 'LEFT';
+        let cell;
+        if (diffFormat === 'line-by-line') {
+          cell = [...w.querySelectorAll(`td.d2h-code-linenumber ${isRight ? '.line-num2' : '.line-num1'}`)].find(n => n.textContent.trim() === String(root.line));
+        } else {
+          const side = w.querySelectorAll('.d2h-file-side-diff')[isRight ? 1 : 0];
+          cell = side && [...side.querySelectorAll('td.d2h-code-side-linenumber')].find(n => n.textContent.trim() === String(root.line));
+        }
+        if (!cell) continue;
+        cell.insertAdjacentHTML('beforeend', `<span class="rc-marker ${root.resolved ? 'done' : ''}" title="${escapeHtml(root.user)}: ${escapeHtml(root.body.split('\n')[0].slice(0, 80))}" onclick="event.stopPropagation(); focusThread(${root.id})">💬</span>`);
+      }
+    }
+    function focusThread(id) {
+      if (cpanel.classList.contains('hidden')) toggleCpanel();
+      const el = document.querySelector(`.cp-thread[data-id="${id}"]`);
+      if (!el) { setCfilter('all'); return focusThreadLater(id); }
+      el.scrollIntoView({ block: 'center' });
+      el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    }
+    function focusThreadLater(id) { setTimeout(() => { const el = document.querySelector(`.cp-thread[data-id="${id}"]`); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); } }, 50); }
+
+    // ── Views ──
+    let view = 'diff';
+    const loaded = { checks: false, review: false, jobs: false };
+    const loaders = { checks: () => loadChecks(), review: () => loadReview(), jobs: () => loadJobs() };
+    function setView(v) {
+      view = v;
+      diffPane.dataset.view = v;
+      document.querySelectorAll('.view-tabs button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+      document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id === `${v}-body`));
+      if (v !== 'diff' && !loaded[v]) { loaded[v] = true; loaders[v](); }
+    }
+    function refreshView() {
+      if (view === 'diff') { lastDiffText = null; loadReviewComments().then(loadDiff); }
+      else loaders[view]();
+    }
+    const md = s => marked.parse(s || '', { breaks: true });
+    const api = (path, params) => fetch(`${path}?repo=${encodeURIComponent(REPO)}&number=${NUMBER}&type=${CATEGORY}` + (params || '')).then(r => r.json());
+
+    // ── Checks ──
+    async function loadChecks() {
+      const el = document.getElementById('checks-body');
+      // Grafana pytest-observability (transformers PRs only). Grafana sends X-Frame-Options: deny, so we fetch
+      // the failing tests through our backend and render only those, with a link out to the full dashboard.
+      const grafana = (CATEGORY === 'pr' && REPO === 'huggingface/transformers')
+        ? `<div class="grafana-bar" id="grafana-bar"><div class="panel-empty" style="padding:8px">Loading pytest failures…</div></div>`
+        : '';
+      el.innerHTML = grafana + '<div class="panel-empty">Loading checks…</div>';
+      if (grafana) loadGrafanaFailures();
+      const d = await api('/api/checks');
+      if (d.error) { const lb = document.getElementById('grafana-bar'); el.innerHTML = grafana + `<div class="panel-err">${escapeHtml(d.error)}</div>`; if (lb) document.getElementById('grafana-bar')?.replaceWith(lb); return; }
+      const groups = { fail: [], pending: [], pass: [], skipping: [] };
+      d.checks.forEach(c => (groups[c.bucket === 'cancel' ? 'fail' : c.bucket] || groups.pass).push(c));
+      const n = document.getElementById('checks-n');
+      n.textContent = groups.fail.length || d.checks.length; n.classList.toggle('bad', groups.fail.length > 0);
+      const row = c => `
+        <div class="chk ${c.bucket}" data-job="${c.job_id || ''}">
+          <span class="dot"></span><span class="nm" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>
+          <span class="wf">${escapeHtml(c.workflow || '')}</span>
+          ${c.bucket === 'fail' && c.job_id ? `<button onclick="toggleLog(this, '${c.job_id}')">log</button>` : ''}
+          ${c.link ? `<a href="${c.link}" target="_blank">↗</a>` : ''}
+        </div>`;
+      const titles = { fail: `Failing (${groups.fail.length})`, pending: `Running (${groups.pending.length})`, pass: `Passing (${groups.pass.length})`, skipping: `Skipped (${groups.skipping.length})` };
+      const liveBar = document.getElementById('grafana-bar');
+      el.innerHTML = grafana + `<div class="checks">${['fail', 'pending', 'pass', 'skipping'].filter(k => groups[k].length).map(k => `
+        <div class="chk-group"><h4>${titles[k]}</h4>
+          ${k === 'pass' || k === 'skipping' ? `<div class="chk-more" onclick="this.nextElementSibling.style.display='block';this.remove()">show ${groups[k].length}…</div><div style="display:none">${groups[k].map(row).join('')}</div>` : groups[k].map(row).join('')}
+        </div>`).join('') || '<div class="panel-empty">No checks reported</div>'}</div>`;
+      if (liveBar) document.getElementById('grafana-bar')?.replaceWith(liveBar);
+    }
+
+    // ── Grafana: failing pytest tests only ──
+    const DASH = `https://transformers-ci.huggingface.cool/d/pytest-observability-by-pr/pytest-observability-branch?var-pr=${encodeURIComponent(NUMBER)}`;
+    async function loadGrafanaFailures() {
+      const bar = document.getElementById('grafana-bar');
+      if (!bar) return;
+      const head = `<div class="gf-head"><h4>pytest failures</h4><a href="${DASH}" target="_blank" rel="noopener">Open in Grafana ↗</a></div>`;
+      let d;
+      try { d = await api('/api/grafana_failures'); } catch (e) { d = { error: 'could not reach Grafana' }; }
+      if (d.error) { bar.innerHTML = head + `<div class="gf-muted">${escapeHtml(d.error)}</div>`; return; }
+      const lanes = (d.lanes || []).filter(l => l.failures.length || l.failed_jobs.length);
+      if (!lanes.length) {
+        const any = (d.lanes || []).some(l => l.run && l.run.run_id);
+        bar.innerHTML = head + (any ? `<div class="gf-ok">✓ No failing pytest tests reported</div>` : `<div class="gf-muted">No pytest data for this PR yet</div>`);
+        return;
+      }
+      const fail = (f, i) => `
+        <div class="gf-fail" id="gf-${i}">
+          <div class="top">
+            <span class="nm" title="${escapeHtml(f.nodeid || '')}">${escapeHtml(f.nodeid || '')}</span>
+            <span class="job">${escapeHtml(f.job || '')}${f.hardware ? ' · ' + escapeHtml(f.hardware) : ''}</span>
+            ${f.trace_id ? `<button onclick="toggleTrace(this, '${f.trace_id}')">trace</button>` : ''}
+          </div>
+          <div class="msg"><b>${escapeHtml(f.exception_type || 'Error')}</b>${f.exception_message ? ': ' + escapeHtml(f.exception_message) : ''}</div>
+        </div>`;
+      let i = 0;
+      bar.innerHTML = head + lanes.map(l => `
+        <div class="gf-lane">${escapeHtml(l.label || l.id || '')}${l.run && l.run.url ? ` · <a href="${l.run.url}" target="_blank" rel="noopener">run ${escapeHtml((l.run.run_id || '').split(':')[0])} ↗</a>` : ''} · ${l.failures.length} failing test${l.failures.length === 1 ? '' : 's'}</div>
+        ${l.failures.map(f => fail(f, i++)).join('')}
+        ${l.failed_jobs.filter(j => !l.failures.some(f => f.job === j.name)).map(j => `
+          <div class="gf-fail"><div class="top"><span class="nm">${escapeHtml(j.name)}</span><span class="job">job failed${j.fail ? ' · ' + j.fail + ' tests' : ''}</span>${j.url ? `<a class="job" href="${j.url}" target="_blank" rel="noopener">↗</a>` : ''}</div></div>`).join('')}
+      `).join('');
+    }
+    async function toggleTrace(btn, traceId) {
+      const host = btn.closest('.gf-fail');
+      const existing = host.querySelector('pre.chk-log');
+      if (existing) { existing.remove(); btn.textContent = 'trace'; return; }
+      btn.textContent = '…'; btn.disabled = true;
+      let d;
+      try { d = await fetch(`/api/grafana_trace?trace_id=${encodeURIComponent(traceId)}`).then(r => r.json()); } catch (e) { d = { error: 'could not fetch trace' }; }
+      btn.disabled = false; btn.textContent = 'hide';
+      const pre = document.createElement('pre'); pre.className = 'chk-log';
+      if (d.error) pre.innerHTML = `<span class="hl">${escapeHtml(d.error)}</span>`;
+      else if (!d.exceptions || !d.exceptions.length) pre.textContent = 'No exception recorded in trace.';
+      else pre.innerHTML = d.exceptions.map(x => escapeHtml((x.stacktrace || '').trim() || `${x.type}: ${x.message}`)).join('\n\n')
+        .replace(/^(E\s{2,}.*|.*Error: .*|.*Error\b.*)$/gm, '<span class="hl">$1</span>');
+      host.appendChild(pre);
+    }
+    async function toggleLog(btn, job) {
+      const host = btn.closest('.chk');
+      const existing = host.nextElementSibling;
+      if (existing && existing.classList.contains('chk-log')) { existing.remove(); btn.textContent = 'log'; return; }
+      btn.textContent = '…'; btn.disabled = true;
+      const d = await fetch(`/api/check_log?repo=${encodeURIComponent(REPO)}&job=${job}`).then(r => r.json());
+      btn.disabled = false; btn.textContent = 'hide';
+      const pre = document.createElement('pre'); pre.className = 'chk-log';
+      pre.innerHTML = d.error ? `<span class="hl">${escapeHtml(d.error)}</span>`
+        : escapeHtml(d.log).replace(/^(FAILED .*|E\s{2,}.*|.*Error: .*|_{5,}.*_{5,})$/gm, '<span class="hl">$1</span>');
+      host.after(pre);
+    }
+
+    // ── Pre-review ──
+    async function loadReview() {
+      const el = document.getElementById('review-body');
+      el.innerHTML = '<div class="panel-empty">Loading…</div>';
+      renderReview(await api('/api/prereview'));
+    }
+    function renderReview(d) {
+      const el = document.getElementById('review-body');
+      const bar = `<div class="review-bar">
+        ${d.review ? `<span>Claude pre-review for <code>${escapeHtml(d.sha || '')}</code>${d.cached ? ' (cached)' : ''}</span><button class="sec" onclick="runReview()">Regenerate</button>`
+                   : `<span>No pre-review yet for <code>${escapeHtml(d.sha || '')}</code>.</span><button onclick="runReview()">Draft review</button>`}
+      </div>`;
+      el.innerHTML = `<div class="review">${bar}${d.error ? `<div class="panel-err">${escapeHtml(d.error)}</div>` : ''}${d.review ? `<div class="md">${md(d.review)}</div>` : '<div class="panel-empty" style="text-align:left;padding:4px 0">One non-interactive Claude pass over the diff, the relore brief and failing CI. Takes a minute or two; cached per commit.</div>'}</div>`;
+    }
+    async function runReview() {
+      const el = document.getElementById('review-body');
+      el.querySelectorAll('.review-bar button').forEach(b => { b.disabled = true; b.textContent = 'Running… (1–3 min)'; });
+      const d = await fetch('/api/prereview', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({repo: REPO, number: NUMBER}) }).then(r => r.json());
+      renderReview(d);
+    }
+
+    // ── HF Jobs ──
+    async function loadJobs() {
+      const el = document.getElementById('jobs-body');
+      el.innerHTML = '<div class="panel-empty">Loading jobs…</div>';
+      const d = await api('/api/jobs');
+      if (d.error) { el.innerHTML = `<div class="panel-err">${escapeHtml(d.error)}</div>`; return; }
+      const n = document.getElementById('jobs-n');
+      const running = d.jobs.filter(j => /RUNNING|PENDING|STARTING/i.test(j.stage)).length;
+      n.textContent = running || d.jobs.length || '';
+      const cls = s => /COMPLETED/i.test(s) ? 'pass' : /ERROR|FAILED|CANCEL/i.test(s) ? 'fail' : /RUNNING|PENDING|STARTING/i.test(s) ? 'pending' : 'skipping';
+      el.innerHTML = `<div class="checks">
+        <div class="chk-group"><h4>Jobs for this PR (${d.jobs.length})</h4>
+        <div style="font-size:11px;color:#8b949e;margin:0 2px 8px">Submit from the Claude session with <code>hf jobs uv run … --label ${escapeHtml(d.label)} -d</code>. Only jobs carrying that label are listed.</div>
+        ${d.jobs.map(j => `
+          <div class="chk ${cls(j.stage)}" data-id="${j.id}">
+            <span class="dot"></span>
+            <span class="nm" title="${escapeHtml(j.command)}"><b style="color:#e6edf3">${escapeHtml(j.stage)}</b> · ${escapeHtml(j.flavor)} · ${timeAgo(j.created_at)} · <span style="font-family:Menlo,monospace">${escapeHtml(j.command)}</span></span>
+            <button onclick="toggleJobLog(this, '${j.id}')">logs</button>
+            ${/RUNNING|PENDING|STARTING/i.test(j.stage) ? `<button onclick="cancelJob(this, '${j.id}')">cancel</button>` : ''}
+            ${j.url ? `<a href="${j.url}" target="_blank">↗</a>` : ''}
+          </div>`).join('') || '<div class="panel-empty">No jobs yet for this PR.</div>'}
+        </div></div>`;
+    }
+    async function toggleJobLog(btn, id) {
+      const host = btn.closest('.chk'); const existing = host.nextElementSibling;
+      if (existing && existing.classList.contains('chk-log')) { existing.remove(); btn.textContent = 'logs'; return; }
+      btn.textContent = '…'; btn.disabled = true;
+      const d = await fetch(`/api/jobs/logs?id=${id}`).then(r => r.json());
+      btn.disabled = false; btn.textContent = 'hide';
+      const pre = document.createElement('pre'); pre.className = 'chk-log';
+      pre.innerHTML = d.error ? `<span class="hl">${escapeHtml(d.error)}</span>` : escapeHtml(d.log || '(no output yet)').replace(/^(Traceback.*|.*Error: .*|E\s{2,}.*)$/gm, '<span class="hl">$1</span>');
+      host.after(pre);
+    }
+    async function cancelJob(btn, id) {
+      // Two-step confirm, no browser dialog.
+      if (btn.dataset.armed !== '1') { btn.dataset.armed = '1'; btn.textContent = 'confirm cancel'; btn.style.borderColor = '#f85149'; setTimeout(() => { btn.dataset.armed = ''; btn.textContent = 'cancel'; btn.style.borderColor = ''; }, 5000); return; }
+      btn.disabled = true; btn.textContent = '…';
+      await fetch('/api/jobs/cancel', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) });
+      loadJobs();
+    }
+    setInterval(() => { if (view === 'jobs') loadJobs(); }, 20000);
+
+    // ── File tree ──
+    const tree = document.getElementById('filetree');
+    const cpanel = document.getElementById('cpanel');
+    function toggleTree() { const h = tree.classList.toggle('hidden'); document.getElementById('tree-toggle').classList.toggle('on', !h); try { localStorage.setItem('terminal.tree', h ? '0' : '1'); } catch (e) {} }
+    function toggleCpanel() { const h = cpanel.classList.toggle('hidden'); document.getElementById('cpanel-toggle')?.classList.toggle('on', !h); try { localStorage.setItem('terminal.cpanel', h ? '0' : '1'); } catch (e) {} }
+    try { if (localStorage.getItem('terminal.tree') === '0') toggleTree(); if (localStorage.getItem('terminal.cpanel') === '0' || (localStorage.getItem('terminal.cpanel') === null && window.innerWidth < 1200)) toggleCpanel(); } catch (e) {}
+
+    function wrapperFor(path) {
+      return [...document.querySelectorAll('#diff-scroll .d2h-file-wrapper')].find(w => w.querySelector('.d2h-file-name')?.textContent.trim() === path);
+    }
+    function threadCounts(path) {
+      const roots = reviewComments.filter(c => !c.reply_to && c.path === path);
+      return { total: roots.length, open: roots.filter(r => !r.resolved).length };
+    }
+    function buildTree(files) {
+      const root = {};
+      files.forEach(f => {
+        const path = (f.newName && f.newName !== '/dev/null') ? f.newName : f.oldName;
+        const parts = path.split('/'); let node = root;
+        parts.forEach((p, i) => { if (i === parts.length - 1) { node[p] = { __file: path, add: f.addedLines, del: f.deletedLines }; } else { node[p] = node[p] || {}; node = node[p]; } });
+      });
+      // Collapse single-child directory chains like GitHub (src/transformers/distributed).
+      const render = (node) => Object.keys(node).sort((a, b) => (node[a].__file ? 1 : 0) - (node[b].__file ? 1 : 0) || a.localeCompare(b)).map(k => {
+        const v = node[k];
+        if (v.__file) {
+          const c = threadCounts(v.__file);
+          return `<div class="ft-file" data-path="${escapeHtml(v.__file)}" title="${escapeHtml(v.__file)}" onclick="gotoFile('${escapeHtml(v.__file)}')"><span class="ic">▤</span><span class="nm">${escapeHtml(k)}</span><span class="cc ${c.open ? 'open' : ''}">${c.total ? `💬${c.total}` : ''}</span><span class="ad">+${v.add}</span><span class="de">−${v.del}</span></div>`;
+        }
+        let name = k, cur = v;
+        while (Object.keys(cur).length === 1 && !cur[Object.keys(cur)[0]].__file) { const only = Object.keys(cur)[0]; name += '/' + only; cur = cur[only]; }
+        return `<div class="ft-dir" onclick="this.classList.toggle('closed')"><span class="chev">▾</span><span>📁</span><span>${escapeHtml(name)}</span></div><div class="ft-children">${render(cur)}</div>`;
+      }).join('');
+      tree.innerHTML = render(root) || '<div class="cp-empty">no files</div>';
+      document.querySelectorAll('#diff-scroll .d2h-file-collapse-input').forEach(cb => cb.addEventListener('change', () => {
+        const path = cb.closest('.d2h-file-wrapper')?.querySelector('.d2h-file-name')?.textContent.trim();
+        tree.querySelector(`.ft-file[data-path="${CSS.escape(path)}"]`)?.classList.toggle('viewed', cb.checked);
+      }));
+    }
+    function gotoFile(path) {
+      const w = wrapperFor(path); if (!w) return;
+      w.scrollIntoView({ block: 'start' });
+      tree.querySelectorAll('.ft-file').forEach(f => f.classList.toggle('current', f.dataset.path === path));
+    }
+    function gotoLine(path, line, side) {
+      const w = wrapperFor(path); if (!w) return;
+      let cell;
+      if (diffFormat === 'line-by-line') cell = [...w.querySelectorAll(side === 'LEFT' ? '.line-num1' : '.line-num2')].find(n => n.textContent.trim() === String(line));
+      else { const s = w.querySelectorAll('.d2h-file-side-diff')[side === 'LEFT' ? 0 : 1]; cell = s && [...s.querySelectorAll('.d2h-code-side-linenumber')].find(n => n.textContent.trim() === String(line)); }
+      const tr = cell?.closest('tr') || w;
+      tr.scrollIntoView({ block: 'center' });
+      tr.classList.remove('flash'); void tr.offsetWidth; tr.classList.add('flash');
+    }
+
+    // ── Comments panel ──
+    let cfilter = 'all';
+    function setCfilter(f) { cfilter = f; document.querySelectorAll('[data-cf]').forEach(b => b.classList.toggle('on', b.dataset.cf === f)); renderCpanel(); }
+    async function renderCpanel() {
+      const body = document.getElementById('cp-body');
+      if (CATEGORY !== 'pr') { body.innerHTML = '<div class="cp-empty">Issues have no inline threads.</div>'; return; }
+      let roots = reviewComments.filter(c => !c.reply_to);
+      const repliesOf = id => reviewComments.filter(c => c.reply_to === id);
+      if (cfilter === 'unresolved') roots = roots.filter(r => !r.resolved);
+      if (cfilter === 'mine') roots = roots.filter(r => [r, ...repliesOf(r.id)].some(c => c.user === ME));
+      roots.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
+      if (!roots.length) { body.innerHTML = `<div class="cp-empty">${reviewComments.length ? 'Nothing matches this filter' : 'No review comments yet'}</div>`; return; }
+      body.innerHTML = roots.map(r => {
+        const all = [r, ...repliesOf(r.id)];
+        const one = c => `<div class="cp-comment"><div class="h"><b>@${escapeHtml(c.user)}</b><span>${timeAgo(c.created_at)}</span>${c.user === ME ? '<span class="tag">you</span>' : ''}</div><div class="b">${md(c.body)}</div></div>`;
+        return `<div class="cp-thread ${r.resolved ? 'resolved' : ''}" data-id="${r.id}">
+          <div class="cp-thead" onclick="gotoLine('${escapeHtml(r.path)}', ${r.line}, '${r.side}')">
+            <span class="f" title="${escapeHtml(r.path)}">${escapeHtml(r.path)}</span><span class="ln">Line ${r.line}${r.outdated ? ' · outdated' : ''}</span>
+            <a href="${r.url}" target="_blank" onclick="event.stopPropagation()" title="Open on GitHub">↗</a>
+            ${r.thread_id ? `<span class="res ${r.resolved ? 'on' : ''}" title="${r.resolved ? 'Unresolve' : 'Resolve'} thread" onclick="event.stopPropagation(); toggleResolve('${r.thread_id}', ${!r.resolved}, this)">✓</span>` : ''}
+          </div>
+          <div class="cp-code" data-path="${escapeHtml(r.path)}" data-line="${r.line}"><div class="l"><span class="n"></span><span class="c" style="color:#484f58">loading…</span></div></div>
+          ${all.map(one).join('')}
+          <div class="cp-reply"><textarea placeholder="Write a reply" onfocus="this.parentNode.classList.add('open')"></textarea>
+            <div class="row"><span class="hint"></span><button onclick="this.closest('.cp-reply').classList.remove('open'); this.closest('.cp-reply').querySelector('textarea').value=''">Cancel</button><button class="go" onclick="sendReply(this, ${r.id})">Reply</button></div></div>
+        </div>`;
+      }).join('');
+      for (const box of body.querySelectorAll('.cp-code')) {
+        const path = box.dataset.path, line = parseInt(box.dataset.line, 10);
+        fileLines(path).then(lines => {
+          if (!lines) { box.innerHTML = '<div class="l"><span class="n"></span><span class="c" style="color:#484f58">start a session to see code</span></div>'; return; }
+          const from = Math.max(1, line - 3);
+          let out = '';
+          for (let n = from; n <= line; n++) out += `<div class="l ${n === line ? 'anchor' : ''}"><span class="n">${n}</span><span class="c">${escapeHtml(lines[n - 1] ?? '')}</span></div>`;
+          box.innerHTML = out;
+        });
+      }
+    }
+    async function sendReply(btn, commentId) {
+      const wrap = btn.closest('.cp-reply'), ta = wrap.querySelector('textarea'), hint = wrap.querySelector('.hint');
+      const body = ta.value.trim(); if (!body) return;
+      // Posting to GitHub is irreversible: arm first, send on the second click.
+      if (!btn.classList.contains('armed')) { btn.classList.add('armed'); btn.textContent = 'Post to GitHub?'; hint.textContent = 'click again to confirm'; setTimeout(() => { btn.classList.remove('armed'); btn.textContent = 'Reply'; hint.textContent = ''; }, 6000); return; }
+      btn.disabled = true; btn.textContent = 'Posting…';
+      const d = await fetch('/api/review_reply', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ repo: REPO, number: NUMBER, comment_id: commentId, body }) }).then(r => r.json());
+      if (d.error) { btn.disabled = false; btn.classList.remove('armed'); btn.textContent = 'Reply'; hint.textContent = d.error; return; }
+      await loadReviewComments(); renderDiff(lastDiffText);
+    }
+    async function toggleResolve(threadId, resolve, el) {
+      el.style.opacity = '.4';
+      const d = await fetch('/api/review_resolve', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ thread_id: threadId, resolve }) }).then(r => r.json());
+      if (d.error) { el.style.opacity = ''; el.title = d.error; return; }
+      await loadReviewComments(); renderDiff(lastDiffText);
+    }
+
+    // ── Expand context (unified) + view file ──
+    const fileCache = {};
+    async function fileLines(path) {
+      if (!fileCache[path]) fileCache[path] = api('/api/file', `&path=${encodeURIComponent(path)}&side=head`).then(d => d.lines || null);
+      return fileCache[path];
+    }
+    function addExpanders() {
+      if (diffFormat !== 'line-by-line') return;
+      diffBody.querySelectorAll('.d2h-file-wrapper').forEach(w => {
+        const path = w.querySelector('.d2h-file-name')?.textContent.trim();
+        if (!path) return;
+        const hdr = w.querySelector('.d2h-file-header');
+        if (hdr && !hdr.querySelector('.viewfile')) hdr.querySelector('.d2h-file-name-wrapper')?.insertAdjacentHTML('beforeend', `<span class="viewfile" onclick="openFileView('${escapeHtml(path)}')">view file</span>`);
+        let prevEnd = 0;
+        w.querySelectorAll('tr').forEach(tr => {
+          // Hunk header rows carry d2h-info on both cells; the text lives in the code cell.
+          const info = tr.querySelector('.d2h-code-line.d2h-info') || (tr.querySelector('.d2h-info') ? tr.querySelector('.d2h-code-line') : null);
+          if (!info) { const n = parseInt(tr.querySelector('.line-num2')?.textContent || '', 10); if (!isNaN(n)) prevEnd = n; return; }
+          const m = info.textContent.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+          if (!m) return;
+          const newStart = parseInt(m[2], 10), delta = parseInt(m[1], 10) - newStart;
+          const gap = newStart - prevEnd - 1;
+          if (gap <= 0) return;
+          const row = document.createElement('tr'); row.className = 'xp-row';
+          row.innerHTML = `<td colspan="2"><div class="xp"><span onclick="expandUp(this, '${escapeHtml(path)}', ${newStart}, ${prevEnd}, ${delta}, 20)">⋯ expand 20 lines ↑</span><span onclick="expandUp(this, '${escapeHtml(path)}', ${newStart}, ${prevEnd}, ${delta}, 100000)">expand all ${gap} ↑</span></div></td>`;
+          tr.before(row);
+        });
+      });
+    }
+    async function expandUp(el, path, newStart, prevEnd, delta, count) {
+      const lines = await fileLines(path);
+      if (!lines) { el.textContent = 'no checkout yet'; el.className = 'muted'; return; }
+      const from = Math.max(prevEnd + 1, newStart - count), to = newStart - 1;
+      const row = el.closest('tr');
+      const frag = document.createDocumentFragment();
+      for (let n = from; n <= to; n++) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="d2h-code-linenumber d2h-cntx"><div class="line-num1">${n + delta}</div><div class="line-num2">${n}</div></td><td class="d2h-cntx"><div class="d2h-code-line d2h-cntx"><span class="d2h-code-line-prefix">&nbsp;</span><span class="d2h-code-line-ctn">${escapeHtml(lines[n - 1] ?? '')}</span></div></td>`;
+        frag.appendChild(tr);
+      }
+      row.after(frag);
+      const left = from - prevEnd - 1;
+      if (left <= 0) row.remove();
+      else row.querySelector('.xp').innerHTML = `<span onclick="expandUp(this, '${escapeHtml(path)}', ${from}, ${prevEnd}, ${delta}, 20)">⋯ expand 20 lines ↑</span><span onclick="expandUp(this, '${escapeHtml(path)}', ${from}, ${prevEnd}, ${delta}, 100000)">expand all ${left} ↑</span>`;
+    }
+    async function openFileView(path, line) {
+      const fv = document.getElementById('fileview');
+      document.getElementById('fv-path').textContent = path;
+      document.getElementById('fv-body').innerHTML = '<div class="panel-empty">Loading…</div>';
+      fv.classList.add('on');
+      const lines = await fileLines(path);
+      if (!lines) { document.getElementById('fv-body').innerHTML = '<div class="panel-err">No checkout yet — start a session first.</div>'; return; }
+      document.getElementById('fv-ref').textContent = 'PR head';
+      const lang = path.split('.').pop();
+      let html = '';
+      try { html = hljs.highlight(lines.join('\n'), { language: lang }).value; } catch (e) { html = escapeHtml(lines.join('\n')); }
+      const rows = html.split('\n');
+      document.getElementById('fv-body').innerHTML = `<table>${rows.map((r, i) => `<tr id="fvl-${i + 1}" ${i + 1 === line ? 'class="hit"' : ''}><td class="ln" onclick="showWhy(event, '${escapeHtml(path)}', ${i + 1})">${i + 1}</td><td class="cd">${r || ' '}</td></tr>`).join('')}</table>`;
+      if (line) document.getElementById(`fvl-${line}`)?.scrollIntoView({ block: 'center' });
+    }
+    function closeFileView() { document.getElementById('fileview').classList.remove('on'); }
+
+    // ── relore why popover ──
+    async function showWhy(ev, path, line) {
+      ev.stopPropagation();
+      const pop = document.getElementById('whypop');
+      document.getElementById('why-loc').textContent = `${path.split('/').pop()}:${line}`;
+      const body = document.getElementById('why-body');
+      body.className = 'wait'; body.textContent = 'Asking relore…';
+      pop.classList.add('on');
+      const x = Math.min(ev.clientX + 12, window.innerWidth - 580), y = Math.min(ev.clientY + 12, window.innerHeight - 300);
+      pop.style.left = Math.max(8, x) + 'px'; pop.style.top = Math.max(8, y) + 'px';
+      const d = await fetch(`/api/relore/why?repo=${encodeURIComponent(REPO)}&path=${encodeURIComponent(path)}&line=${line}`).then(r => r.json()).catch(() => ({ error: 'request failed' }));
+      body.className = '';
+      body.innerHTML = d.error ? `<div class="panel-err">${escapeHtml(d.error)}</div>` : `<pre>${escapeHtml(d.text || '(nothing indexed for this line)')}</pre>`;
+    }
+    function hideWhy() { document.getElementById('whypop').classList.remove('on'); }
+    document.addEventListener('click', e => { if (!e.target.closest('#whypop')) hideWhy(); });
+    diffBody.addEventListener('click', e => {
+      const num = e.target.closest('.line-num2, .d2h-code-side-linenumber');
+      if (!num) return;
+      const w = num.closest('.d2h-file-wrapper'); const path = w?.querySelector('.d2h-file-name')?.textContent.trim();
+      const line = parseInt(num.textContent, 10);
+      if (!path || isNaN(line)) return;
+      if (num.classList.contains('d2h-code-side-linenumber')) { const sides = [...w.querySelectorAll('.d2h-file-side-diff')]; if (sides.indexOf(num.closest('.d2h-file-side-diff')) !== 1) return; }
+      showWhy(e, path, line);
+    });
+
+    // ── Lookup (selection → relore / grep) ──
+    const selpill = document.getElementById('selpill');
+    let selText = '';
+    function setRpanel(which) {
+      cpanel.dataset.rp = which;
+      document.querySelectorAll('[data-rp]').forEach(b => { if (b.tagName === 'BUTTON') b.classList.toggle('on', b.dataset.rp === which); });
+    }
+    document.addEventListener('mouseup', e => {
+      if (e.target.closest('#selpill')) return;
+      setTimeout(() => {
+        const sel = window.getSelection(); const txt = sel ? sel.toString().trim() : '';
+        const inCode = txt && sel.anchorNode && sel.anchorNode.parentElement?.closest('#diff-scroll, #fileview, .cp-code');
+        if (inCode && txt.length >= 2) {
+          selText = txt;
+          const r = sel.getRangeAt(0).getBoundingClientRect();
+          document.getElementById('selpill-q').textContent = txt.replace(/\s+/g, ' ').slice(0, 60);
+          selpill.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 340)) + 'px';
+          selpill.style.top = Math.max(4, r.top - 30) + 'px';
+          selpill.classList.add('on');
+        } else selpill.classList.remove('on');
+      }, 0);
+    });
+    document.addEventListener('mousedown', e => { if (!e.target.closest('#selpill')) selpill.classList.remove('on'); });
+    const isIdent = s => /^[A-Za-z_][A-Za-z0-9_\.]{1,80}$/.test(s);
+    async function lookupSelection(mode) {
+      selpill.classList.remove('on');
+      const q = selText; if (!q) return;
+      if (cpanel.classList.contains('hidden')) toggleCpanel();
+      setRpanel('lookup');
+      const body = document.getElementById('lk-body');
+      const ident = isIdent(q);
+      body.innerHTML = `<div class="lk-q">${escapeHtml(q.length > 600 ? q.slice(0, 600) + '…' : q)}</div>
+        ${mode === 'grep' || ident ? `<div class="lk-sec" id="lk-grep"><h4>Usages in checkout</h4><div class="lk-wait">searching…</div></div>` : ''}
+        <div class="lk-sec" id="lk-relore"><h4>${ident ? `relore · symbol <code>${escapeHtml(q)}</code>` : 'relore · what the project said about this'}</h4><div class="lk-wait">asking relore…</div></div>`;
+      const jobs = [];
+      if (mode === 'grep' || ident) {
+        // Longest identifier in the selection, skipping Python keywords.
+        const kw = new Set(['def','class','return','import','from','self','None','True','False','if','else','elif','for','while','with','as','in','not','and','or','is','try','except','finally','raise','lambda','yield','pass','break','continue','global','nonlocal','assert','del','async','await']);
+        const g = ident ? q : ((q.match(/[A-Za-z_][A-Za-z0-9_]{2,}/g) || []).filter(w => !kw.has(w)).sort((a, b) => b.length - a.length)[0] || '');
+        if (!g) document.getElementById('lk-grep').innerHTML = '<h4>Usages</h4><div class="lk-wait">no identifier in the selection</div>';
+        if (g) jobs.push(api('/api/grep', `&q=${encodeURIComponent(g)}`).then(d => {
+          const el = document.getElementById('lk-grep'); if (!el) return;
+          const hits = d.hits || [];
+          const row = h => `<div class="lk-hit" onclick="openFileView('${escapeHtml(h.path)}', ${h.line})"><span class="p" title="${escapeHtml(h.path)}">${escapeHtml(h.path)}:${h.line}</span><span class="t">${escapeHtml(h.text.trim())}</span></div>`;
+          el.innerHTML = `<h4>Usages of <code>${escapeHtml(g)}</code> (${hits.length}${d.truncated ? '+' : ''})${hits.length > 25 ? '<span class="more" onclick="this.closest(\'.lk-sec\').classList.add(\'all\');this.remove()">show all</span>' : ''}</h4>
+            ${d.error ? `<div class="panel-err">${escapeHtml(d.error)}</div>` : hits.slice(0, 25).map(row).join('') + (hits.length > 25 ? `<div class="lk-more-rows" style="display:none">${hits.slice(25).map(row).join('')}</div>` : '') || '<div class="lk-wait">none</div>'}`;
+        }));
+      }
+      const rel = ident ? `/api/relore/symbol?repo=${encodeURIComponent(REPO)}&q=${encodeURIComponent(q)}` : `/api/relore/search?repo=${encodeURIComponent(REPO)}&q=${encodeURIComponent(q)}`;
+      jobs.push(fetch(rel).then(x => x.json()).catch(() => ({ error: 'request failed' })).then(r => {
+        const el = document.getElementById('lk-relore'); if (!el) return;
+        el.querySelector('.lk-wait').outerHTML = r.error ? `<div class="panel-err">${escapeHtml(r.error)}</div>` : `<pre class="lk-pre">${escapeHtml(r.text || '(nothing indexed)')}</pre>`;
+      }));
+      await Promise.all(jobs);
+    }
+
+    async function loadDiff() {
+      const url = diffSource === 'pr'
+        ? `/api/diff?repo=${encodeURIComponent(REPO)}&number=${NUMBER}`
+        : `/api/local_diff?repo=${encodeURIComponent(REPO)}&number=${NUMBER}&type=${CATEGORY}`;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const scrollEl = document.getElementById('diff-scroll');
+        if (data.error) { scrollEl.innerHTML = `<div class="diff-empty">${escapeHtml(data.error)}</div>`; return; }
+        if (data.note && !data.diff) { scrollEl.innerHTML = `<div class="diff-empty">${escapeHtml(data.note)}</div>`; diffStat.textContent = ''; return; }
+        if (data.diff === lastDiffText) return;   // unchanged: don't redraw and lose scroll
+        lastDiffText = data.diff;
+        renderDiff(data.diff);
+      } catch (e) {
+        console.error('diff load/render failed', e);
+        document.getElementById('diff-scroll').innerHTML = `<div class="diff-empty">Failed to load diff: ${escapeHtml(String(e))}</div>`;
+      }
+    }
+
+    // Local changes refresh while a session runs, so you see Claude's edits land.
+    setInterval(() => { if (termActive && diffSource === 'local' && !diffPane.classList.contains('hidden')) loadDiff(); }, 10000);
+
+    // Draggable splitter
+    (function () {
+      let dragging = false;
+      splitter.addEventListener('mousedown', e => { dragging = true; splitter.classList.add('dragging'); e.preventDefault(); });
+      window.addEventListener('mouseup', () => { if (dragging) { dragging = false; splitter.classList.remove('dragging'); refit(); } });
+      window.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        const ws = document.querySelector('.workspace').getBoundingClientRect();
+        const h = Math.max(120, Math.min(ws.bottom - e.clientY, ws.height - 160));
+        document.querySelector('.terminal-area').style.height = h + 'px';
+        fitAddon.fit();
+      });
+    })();
+
+    // Restore per-viewer preferences
+    (function () {
+      try {
+        if (localStorage.getItem('terminal.diffPane') === '0') toggleDiffPane();
+        const fmt = localStorage.getItem('terminal.diffFormat');
+        if (fmt === 'line-by-line') setFormat(fmt);
+      } catch (e) {}
+    })();
+    loadReviewComments().then(loadDiff);
 
     // Resize handling
     window.addEventListener('resize', () => {
@@ -127,6 +1021,7 @@
       hideOverlay();
       termActive = true;
       term.focus();
+      fitAddon.fit();
       // Send initial resize
       socket.emit('resize', { rows: term.rows, cols: term.cols });
     });
@@ -148,11 +1043,14 @@
       overlay.classList.remove('hidden');
       document.getElementById('overlay-status').textContent = message;
       spinner.style.display = hideSpinner ? 'none' : 'block';
+      document.getElementById('overlay-new').style.display = hideSpinner ? 'inline-block' : 'none';
     }
 
     function hideOverlay() {
       document.getElementById('overlay').classList.add('hidden');
     }
+
+    showOverlay('Select a session above, or start a new one', true);
 
     // Session management
     function startNew() {
@@ -194,22 +1092,24 @@
         const list = document.getElementById('session-list');
 
         if (data.sessions.length === 0) {
-          list.innerHTML = '<div class="no-sessions">No previous sessions</div>';
+          list.innerHTML = '<span class="no-sessions">No previous sessions</span>';
           return;
         }
 
-        list.innerHTML = data.sessions.map(s => `
+        list.innerHTML = data.sessions.map(s => {
+          const label = s.slug || s.first_prompt || 'session';
+          const tip = [s.first_prompt, s.git_branch ? `branch: ${s.git_branch}` : '', formatTime(s.started_at)].filter(Boolean).join('\n');
+          return `
           <div class="session-item${s.session_id === activeSessionId ? ' active' : ''}"
                data-session-id="${escapeHtml(s.session_id)}"
+               title="${escapeHtml(tip)}"
                onclick="resumeSession('${escapeHtml(s.session_id)}')">
-            ${s.slug ? `<div class="session-slug">${escapeHtml(s.slug)}</div>` : ''}
-            <div class="session-prompt">${escapeHtml(s.first_prompt)}</div>
-            <div class="session-meta">${formatTime(s.started_at)}</div>
-            ${s.git_branch ? `<div class="session-branch">branch: ${escapeHtml(s.git_branch)}</div>` : ''}
-          </div>
-        `).join('');
+            <span class="label">${escapeHtml(label)}</span>
+            <span class="when">${escapeHtml(formatTime(s.started_at))}</span>
+          </div>`;
+        }).join('');
       } catch (e) {
-        document.getElementById('session-list').innerHTML = '<div class="no-sessions">Failed to load sessions</div>';
+        document.getElementById('session-list').innerHTML = '<span class="no-sessions">Failed to load sessions</span>';
       }
     }
 

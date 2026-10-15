@@ -18,8 +18,15 @@ active_ptys = {}
 READ_CHUNK = 65536
 
 
-def spawn_claude(sid, socketio, cwd, resume_session_id=None):
-    """Spawn Claude Code in a PTY at the given CWD. Optionally resume a session."""
+def spawn_claude(sid, socketio, cwd, resume_session_id=None, env_extra=None,
+                 initial_prompt=None):
+    """
+    Spawn Claude Code in a PTY at the given CWD. Optionally resume a session.
+
+    env_extra: extra environment for the session (e.g. RELORE_API / RELORE_REPO
+    so `relore` works bare inside it).
+    initial_prompt: opening message for a fresh session; ignored on resume.
+    """
     pid, fd = pty.fork()
 
     if pid == 0:
@@ -27,10 +34,13 @@ def spawn_claude(sid, socketio, cwd, resume_session_id=None):
         os.chdir(str(cwd))
         env = os.environ.copy()
         env["TERM"] = "xterm-256color"
+        env.update(env_extra or {})
 
         cmd = [shutil.which("claude") or "claude"]
         if resume_session_id:
             cmd.extend(["--resume", resume_session_id])
+        elif initial_prompt:
+            cmd.append(initial_prompt)
 
         os.execvpe(cmd[0], cmd, env)
     else:
@@ -78,8 +88,15 @@ def write_to_pty(sid, data):
     session = active_ptys.get(sid)
     if not session:
         return
-    fd = session["fd"]
-    buf = data.encode("utf-8")
+    # Keystrokes arrive as separate socket events, each on its own greenthread.
+    # Two of them blocking on the same fd makes eventlet raise "Second
+    # simultaneous write on fileno", dropping input — so serialise per session.
+    lock = session.setdefault("write_lock", eventlet.semaphore.Semaphore())
+    with lock:
+        _write_all(session["fd"], data.encode("utf-8"))
+
+
+def _write_all(fd, buf):
     written = 0
     while written < len(buf):
         try:

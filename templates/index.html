@@ -54,6 +54,10 @@
     .review-approved { background: #238636; color: #fff; }
     .review-changes { background: #da3633; color: #fff; }
     .review-pending { background: #30363d; color: #8b949e; }
+    .rel-badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+    .rel-mine { background: #1f6feb; color: #fff; }
+    .rel-review_requested { background: #9e6a03; color: #fff; }
+    .rel-mentioned { background: #30363d; color: #8b949e; }
     .draft-badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 10px; background: #30363d; color: #8b949e; }
 
     .item-meta { font-size: 12px; color: #8b949e; width: 100%; margin-top: 2px; }
@@ -139,7 +143,8 @@
     <h1>GitHub Activity</h1>
     <div>
       <span class="status-dot"></span>
-      <span id="last-updated">Updated just now</span>
+      <a href="/" style="color:#58a6ff;font-size:13px;text-decoration:none;margin-right:12px">← board</a>
+    <span id="last-updated">Updated just now</span>
     </div>
   </header>
 
@@ -162,6 +167,12 @@
       {% for repo in repos %}
       <option value="{{ repo }}" {{ 'selected' if repo == active_repo }}>{{ repo.split('/')[-1] }}</option>
       {% endfor %}
+    </select>
+    <select class="filter-select" id="relation-filter" onchange="applyFilters()">
+      <option value="">Everything</option>
+      <option value="mine" {{ 'selected' if active_relation == 'mine' }}>Mine</option>
+      <option value="review_requested" {{ 'selected' if active_relation == 'review_requested' }}>Review requested</option>
+      <option value="mentioned" {{ 'selected' if active_relation == 'mentioned' }}>Mentioned</option>
     </select>
     <select class="filter-select" id="review-filter" onchange="applyFilters()">
       <option value="">All statuses</option>
@@ -187,6 +198,11 @@
         <div class="item-title">
           <a href="{{ item.url }}" target="_blank">#{{ item.number }} {{ item.title }}</a>
         </div>
+        {% if item.relation %}
+        <span class="rel-badge rel-{{ item.relation }}">
+          {{ {'mine': 'Mine', 'review_requested': 'Your review', 'mentioned': 'Mentioned'}[item.relation] }}
+        </span>
+        {% endif %}
         {% if category == 'pr' %}
         <div class="status-badges">
           {% if item.is_draft %}
@@ -284,8 +300,10 @@
       params.set('tab', activeTab);
       const repo = document.getElementById('repo-filter').value;
       const review = document.getElementById('review-filter').value;
+      const relation = document.getElementById('relation-filter').value;
       if (repo) params.set('repo', repo);
       if (review) params.set('review', review);
+      if (relation) params.set('relation', relation);
       {% if show_muted %}params.set('muted', '1');{% endif %}
       history.replaceState(null, '', '?' + params.toString());
       if (reload) location.reload();
