@@ -58,9 +58,41 @@
     .topbar .toggle { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
     .topbar .toggle.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
     .workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
-    .rt-form { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:0 2px; }
-    .rt-form input, .rt-form select { background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:4px 6px; font-size:11px; font-family:Menlo,monospace; }
-    #rt-target { flex:1; min-width:220px; }
+    /* Tests tab */
+    .tests { padding: 10px 10px 20px; }
+    .t-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px; position: relative; }
+    .t-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; } .t-row:last-child { margin-bottom: 0; }
+    .t-row input, .t-row select, .t-start select { background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 5px 8px; font-size: 11.5px; font-family: Menlo, Consolas, monospace; }
+    .t-row input:focus { outline: none; border-color: #58a6ff; }
+    #t-target { flex: 1; min-width: 260px; }
+    .t-lbl { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: .04em; }
+    .t-grow { flex: 1; }
+    .t-where button { padding: 4px 10px; }
+    .t-only-box, .t-only-job { display: none; } .t-card.w-box .t-only-box, .t-card.w-job .t-only-job { display: inline-block; }
+    .t-primary { background: #238636; color: #fff; border: 1px solid #2ea043; border-radius: 6px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .t-primary:hover { background: #2ea043; } .t-primary:disabled { opacity: .5; cursor: default; }
+    .t-primary.arm, button.arm { background: #9e6a03; border-color: #d29922; color: #fff; }
+    .t-env { font-size: 11px; color: #8b949e; border-top: 1px solid #21262d; padding-top: 8px; margin-top: 2px; }
+    .t-env a { color: #58a6ff; text-decoration: none; margin-left: 10px; }
+    .t-pill { padding: 1px 8px; border-radius: 10px; font-size: 10.5px; border: 1px solid; }
+    .t-pill.ok { color: #3fb950; border-color: #238636; background: #12261e; } .t-pill.warn { color: #d29922; border-color: #9e6a03; background: #2a2109; } .t-pill.bad { color: #f85149; border-color: #da3633; background: #2d1215; }
+    .t-muted { color: #8b949e; font-size: 11px; } .t-bad { color: #f85149; font-size: 11px; }
+    #t-flash { position: absolute; right: 12px; top: -11px; font-size: 11px; padding: 2px 10px; border-radius: 10px; border: 1px solid; background: #161b22; }
+    #t-flash.ok { color: #3fb950; border-color: #238636; } #t-flash.bad { color: #f85149; border-color: #da3633; }
+    .t-cheat { margin: 10px 0 4px; border: 1px dashed #30363d; border-radius: 8px; }
+    .t-cheat-head { display: flex; gap: 10px; align-items: center; padding: 6px 12px; font-size: 11.5px; color: #e6edf3; cursor: pointer; } .t-cheat-head .t-caret { margin-left: auto; color: #8b949e; }
+    .t-cheat.closed .t-cheat-body { display: none; } .t-cheat.closed .t-caret { transform: rotate(-90deg); }
+    .t-cheat-body { margin: 0; padding: 4px 12px 10px; font-family: Menlo, Consolas, monospace; font-size: 11px; color: #c9d1d9; line-height: 1.6; white-space: pre; overflow-x: auto; }
+    .tests h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #8b949e; margin: 16px 2px 6px; display: flex; align-items: baseline; gap: 8px; }
+    .t-count { background: #30363d; color: #c9d1d9; font-size: 10px; padding: 0 6px; border-radius: 8px; }
+    .t-h4note { text-transform: none; letter-spacing: 0; font-weight: normal; }
+    .t-status { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: #e6edf3; width: 64px; flex-shrink: 0; }
+    .t-where-tag { font-size: 10.5px; color: #8b949e; background: #21262d; padding: 0 6px; border-radius: 4px; flex-shrink: 0; }
+    .t-mono { font-family: Menlo, Consolas, monospace; }
+    .t-empty { color: #484f58; font-size: 12px; padding: 12px 8px; } .t-empty code { color: #8b949e; }
+    .t-start { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 8px; border: 1px dashed #30363d; border-radius: 4px; margin-top: 4px; }
+    .t-start button { font-size: 10.5px; padding: 2px 9px; border-radius: 4px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; cursor: pointer; }
+    .chk-log .ok { color: #3fb950; }
     .splitter { height: 5px; cursor: row-resize; background: #21262d; flex-shrink: 0; }
     .splitter:hover, .splitter.dragging { background: #58a6ff; }
     .diff-pane { flex: 1; min-height: 120px; display: flex; flex-direction: column; background: #0d1117; overflow: hidden; }
@@ -216,7 +248,10 @@
     .rl-badge.merged { color: #a371f7; border-color: #a371f7; text-transform: none; } .rl-badge.auth { color: #3fb950; border-color: #3fb950; }
     .rl-meta { margin-left: auto; white-space: nowrap; }
     .rl-title { color: #e6edf3; font-weight: 600; margin-bottom: 2px; }
-    .rl-snip { color: #c9d1d9; } .rl-snip p { margin: 0 0 3px; } .rl-snip p:last-child { margin: 0; }
+    .rl-snip { color: #c9d1d9; max-height: 60vh; overflow: auto; } .rl-snip p { margin: 0 0 3px; } .rl-snip p:last-child { margin: 0; }
+    .rl-snip h1, .rl-snip h2, .rl-snip h3, .rl-snip h4 { font-size: 12px; margin: 6px 0 2px; color: #e6edf3; }
+    .rl-snip ul, .rl-snip ol { padding-left: 18px; margin: 3px 0; } .rl-snip img { max-width: 100%; } .rl-snip table { font-size: 10.5px; }
+    .rl-more { display: inline-block; margin-top: 3px; font-size: 10.5px; color: #58a6ff; text-decoration: none; } .rl-more:hover { text-decoration: underline; }
     .rl-snip code { background: #0d1117; border: 1px solid #21262d; border-radius: 3px; padding: 0 3px; font-size: 10.5px; }
     .rl-snip pre { background: #0d1117; border: 1px solid #21262d; border-radius: 4px; padding: 5px; overflow-x: auto; margin: 3px 0; }
     .why-blame { color: #8b949e; font-size: 11px; margin-bottom: 6px; }
@@ -350,7 +385,7 @@
           <button class="on" data-view="diff" onclick="setView('diff')">Diff</button>
           {% if category == 'pr' %}
           <button data-view="checks" onclick="setView('checks')">Checks<span class="n" id="checks-n"></span></button>
-          <button data-view="jobs" onclick="setView('jobs')">Jobs<span class="n" id="jobs-n"></span></button>
+          <button data-view="jobs" onclick="setView('jobs')">Tests<span class="n" id="jobs-n"></span></button>
           {% endif %}
         </div>
         <div class="diff-only">
@@ -664,6 +699,9 @@
           </div>
           <div class="msg"><b>${escapeHtml(f.exception_type || 'Error')}</b>${f.exception_message ? ': ' + escapeHtml(f.exception_message) : ''}</div>
         </div>`;
+      // Warm the server's trace cache now (a few at a time) so "trace" opens instantly.
+      const ids = [...new Set(lanes.flatMap(l => l.failures.map(f => f.trace_id)).filter(Boolean))].slice(0, 12);
+      (async () => { for (let k = 0; k < ids.length; k += 3) await Promise.all(ids.slice(k, k + 3).map(id => fetch(`/api/grafana_trace?trace_id=${encodeURIComponent(id)}`).catch(() => {}))); })();
       let i = 0;
       bar.innerHTML = head + lanes.map(l => `
         <div class="gf-lane">${escapeHtml(l.label || l.id || '')}${l.run && l.run.url ? ` · <a href="${l.run.url}" target="_blank" rel="noopener">run ${escapeHtml((l.run.run_id || '').split(':')[0])} ↗</a>` : ''} · ${l.failures.length} failing test${l.failures.length === 1 ? '' : 's'}</div>
@@ -676,7 +714,7 @@
       const host = btn.closest('.gf-fail');
       const existing = host.querySelector('pre.chk-log');
       if (existing) { existing.remove(); btn.textContent = 'trace'; return; }
-      btn.textContent = '…'; btn.disabled = true;
+      btn.textContent = 'fetching…'; btn.disabled = true;
       let d;
       try { d = await fetch(`/api/grafana_trace?trace_id=${encodeURIComponent(traceId)}`).then(r => r.json()); } catch (e) { d = { error: 'could not fetch trace' }; }
       btn.disabled = false; btn.textContent = 'hide';
@@ -796,124 +834,284 @@
     paintClaudeBtn();
     if (claudeOn) ensureClaudeReview(false).then(() => { if (lastDiffText !== null) renderDiff(lastDiffText); });
 
-    // ── HF Jobs ──
+    // ── Tests tab ──────────────────────────────────────────────────────────
+    // Form state lives in T (persisted per PR); lists re-render independently
+    // of the form so typing is never clobbered by a refresh.
+    const T_KEY = `tests.${REPO}#${NUMBER}`;
+    const T = Object.assign({ target: '', args: '', where: 'local', box: '', flavor: 't4-small', timeout: '45m', cheat: true },
+      (() => { try { return JSON.parse(localStorage.getItem(T_KEY) || '{}'); } catch (e) { return {}; } })());
+    const saveT = () => { try { localStorage.setItem(T_KEY, JSON.stringify(T)); } catch (e) {} };
+    const FLAVORS = ['cpu-basic','cpu-upgrade','t4-small','t4-medium','l4x1','a10g-small','a10g-large','a10g-largex2','a100-large','h200'];
+    const SMALL = new Set(['cpu-basic','cpu-upgrade','t4-small','t4-medium','l4x1','a10g-small']);
+    const PRICE = { 'cpu-basic': 'free-ish', 't4-small': '$0.40/h', 'a10g-small': '$1/h', 'a10g-largex2': '$3/h', 'a100-large': '$2.50/h', 'h200': '$5/h' };
+    let boxes = [], envInfo = null;
+    const runLogs = {};   // run id -> {offset, text, open}
+    const running = /RUNNING|PENDING|STARTING|SCHEDULING/i;
+
     async function loadJobs() {
       const el = document.getElementById('jobs-body');
-      if (document.getElementById('rt-target')) rememberRt();   // keep typed values across the 20s refresh
-      if (!document.getElementById('rt-target')) el.innerHTML = '<div class="panel-empty">Loading jobs…</div>';
-      const d = await api('/api/jobs');
-      if (d.error) { el.innerHTML = `<div class="panel-err">${escapeHtml(d.error)}</div>`; return; }
-      const n = document.getElementById('jobs-n');
-      const running = d.jobs.filter(j => /RUNNING|PENDING|STARTING/i.test(j.stage)).length;
-      n.textContent = running || d.jobs.length || '';
-      const cls = s => /COMPLETED/i.test(s) ? 'pass' : /ERROR|FAILED|CANCEL/i.test(s) ? 'fail' : /RUNNING|PENDING|STARTING/i.test(s) ? 'pending' : 'skipping';
-      const form = `
-        <div class="chk-group"><h4>Run tests on HF Jobs</h4>
-          <div class="rt-form">
-            <input id="rt-target" placeholder="tests/path/test_x.py[::Class::test]  (space-separated ok)" value="${escapeHtml(window.__rtTarget || guessTestTarget())}">
-            <select id="rt-flavor">${['cpu-basic','cpu-upgrade','t4-small','t4-medium','l4x1','a10g-small','a10g-large','a10g-largex2','a100-large','h200'].map(f => `<option ${f === (window.__rtFlavor || 't4-small') ? 'selected' : ''}>${f}</option>`).join('')}</select>
-            <input id="rt-timeout" value="${window.__rtTimeout || '45m'}" style="width:52px" title="max duration">
-            <input id="rt-args" placeholder="extra pytest args, e.g. -k name" value="${escapeHtml(window.__rtArgs || '')}" style="width:160px">
-            <button id="rt-run" onclick="runTests(this)">Run</button>
-            <span style="color:#484f58">|</span>
-            <button id="rt-shell" onclick="startShell(this)" title="Interactive box: PR checked out in /work, browser terminal + ssh">Start shell</button>
-          </div>
-          <div id="rt-msg" style="font-size:11px;color:#8b949e;margin:4px 2px 0"><b>Run</b>: checks out the PR head in <code>huggingface/transformers-all-latest-gpu</code>, installs <code>.[testing]</code>, runs pytest. <b>Start shell</b>: same box, but interactive (browser terminal, or <code>codepilot-shell --attach &lt;id&gt;</code> for ssh); runs until cancelled or the timeout. Flavors above a10g-small need a second click.</div>
+      if (!document.getElementById('t-form')) {
+        if (!T.target) T.target = guessTestTarget();
+        el.innerHTML = `<div class="tests">
+          <section class="t-card" id="t-form">${renderForm()}</section>
+          <section class="t-cheat ${T.cheat ? '' : 'closed'}" id="t-cheat">${renderCheat()}</section>
+          <section id="t-runs"></section>
+          <section id="t-boxes"></section>
+          <section id="t-jobs"></section>
         </div>`;
-      el.innerHTML = `<div class="checks">${form}
-        <div class="chk-group"><h4>Jobs for this PR (${d.jobs.length})</h4>
-        <div style="font-size:11px;color:#8b949e;margin:0 2px 8px">From the Claude session: <code>codepilot-test tests/… --flavor t4-small</code>, or <code>hf jobs uv run … --label ${escapeHtml(d.label)} -d</code> for scripts. Only jobs carrying that label are listed.</div>
-        ${d.jobs.map(j => `
-          <div class="chk ${cls(j.stage)}" data-id="${j.id}">
+        bindForm();
+        refreshEnv();
+      }
+      await Promise.all([renderRuns(), renderBoxes(), renderJobs()]);
+    }
+
+    function renderForm() {
+      return `
+        <div class="t-row">
+          <input id="t-target" placeholder="tests/path/test_x.py[::Class::test]   (space-separated targets ok)" value="${escapeHtml(T.target)}" spellcheck="false">
+          <input id="t-args" placeholder="pytest args, e.g. -k name -x" value="${escapeHtml(T.args)}" spellcheck="false" style="width:170px">
+        </div>
+        <div class="t-row">
+          <span class="t-lbl">run</span>
+          <div class="seg t-where">
+            <button data-w="local" title="pytest in the PR worktree on this Mac — seconds">Local</button>
+            <button data-w="box" title="on a running GPU box over ssh — seconds">Warm box</button>
+            <button data-w="job" title="fresh HF Job: schedule + image + install — minutes">HF Job</button>
+          </div>
+          <select id="t-box" class="t-only-box" title="which box"></select>
+          <select id="t-flavor" class="t-only-job">${FLAVORS.map(f => `<option value="${f}" ${f === T.flavor ? 'selected' : ''}>${f}${PRICE[f] ? ' · ' + PRICE[f] : ''}</option>`).join('')}</select>
+          <input id="t-timeout" class="t-only-job" value="${escapeHtml(T.timeout)}" title="max duration" style="width:48px">
+          <span class="t-grow"></span>
+          <button id="t-run" class="t-primary">▶ Run</button>
+        </div>
+        <div class="t-row t-env" id="t-env"><span class="t-muted">checking local env…</span></div>`;
+    }
+
+    function renderCheat() {
+      return `<div class="t-cheat-head" onclick="T.cheat=!T.cheat;saveT();document.getElementById('t-cheat').classList.toggle('closed')">
+          <span>In the Claude session</span><span class="t-muted">type these — Claude runs them and summarizes failures</span><span class="t-caret">▾</span></div>
+        <pre class="t-cheat-body">/test tests/tensor_parallel/test_tensor_parallel.py      local, seconds (default)
+/test tests/models/llama -k generation                   extra pytest args pass through
+/test tests/x.py --box &lt;job id&gt;                           on a warm GPU box (ids listed under Boxes)
+/test tests/x.py --job --flavor a10g-small               one-shot HF Job (minutes of startup)
+/test --env                                              is the env ready, does it import this PR's code
+codepilot-shell [--flavor t4-small]                      start a warm box and ssh into it</pre>`;
+    }
+
+    function bindForm() {
+      const $ = id => document.getElementById(id);
+      $('t-target').oninput = e => { T.target = e.target.value; saveT(); };
+      $('t-args').oninput = e => { T.args = e.target.value; saveT(); };
+      $('t-flavor').onchange = e => { T.flavor = e.target.value; saveT(); };
+      $('t-timeout').oninput = e => { T.timeout = e.target.value; saveT(); };
+      $('t-box').onchange = e => { T.box = e.target.value; saveT(); };
+      document.querySelectorAll('.t-where button').forEach(b => b.onclick = () => { T.where = b.dataset.w; saveT(); syncWhere(); });
+      $('t-run').onclick = () => submitRun($('t-run'));
+      $('t-target').onkeydown = e => { if (e.key === 'Enter') submitRun($('t-run')); };
+      syncWhere();
+    }
+
+    function syncWhere() {
+      document.querySelectorAll('.t-where button').forEach(b => b.classList.toggle('on', b.dataset.w === T.where));
+      const form = document.getElementById('t-form');
+      form.classList.toggle('w-box', T.where === 'box');
+      form.classList.toggle('w-job', T.where === 'job');
+      const sel = document.getElementById('t-box');
+      sel.innerHTML = boxes.length
+        ? boxes.map(b => `<option value="${b.id}" ${b.id === T.box ? 'selected' : ''}>${escapeHtml(b.flavor)} · ${b.id.slice(-6)} · up ${timeAgo(b.created_at)}</option>`).join('')
+        : '<option value="">no running box — start one below</option>';
+      if (boxes.length && !boxes.some(b => b.id === T.box)) { T.box = boxes[0].id; saveT(); sel.value = T.box; }
+      const btn = document.getElementById('t-run');
+      btn.textContent = T.where === 'local' ? '▶ Run locally' : T.where === 'box' ? '▶ Run on box' : '▶ Submit job';
+      btn.disabled = T.where === 'box' && !boxes.length;
+    }
+
+    async function refreshEnv() {
+      const el = document.getElementById('t-env'); if (!el) return;
+      const d = await api('/api/tests/local', '&env=1').catch(() => ({}));
+      envInfo = d.env || null;
+      if (!envInfo) { el.innerHTML = '<span class="t-bad">env status unavailable</span>'; return; }
+      const e = envInfo;
+      const ok = e.env_ready && e.uses_pr_code;
+      el.innerHTML = `
+        <span class="t-pill ${e.env_ready ? 'ok' : 'warn'}">${e.env_ready ? 'local env ready' : 'local env not built'}</span>
+        ${e.env_ready ? `<span class="t-pill ${e.uses_pr_code ? 'ok' : 'bad'}" title="${escapeHtml(e.transformers_from || '')}">${e.uses_pr_code ? 'imports this PR’s code' : 'NOT importing PR code'}</span>` : ''}
+        ${e.python ? `<span class="t-muted">py ${escapeHtml(e.python)} · torch ${escapeHtml(e.torch)} · deps ${escapeHtml(e.deps_installed_at || '?')}</span>` : ''}
+        ${e.import_error ? `<span class="t-bad" title="${escapeHtml(e.import_error)}">import error — PR may add a dependency</span>` : ''}
+        ${!e.env_ready ? '<span class="t-muted">first local run builds it (a few minutes), after that runs take seconds</span>' : ''}
+        <span class="t-grow"></span>
+        <a href="#" onclick="refreshDeps();return false" title="rebuild venv deps (PR adds a dependency)">refresh deps</a>
+        <a href="#" onclick="refreshEnv();return false">re-check</a>`;
+    }
+
+    async function refreshDeps() {
+      const r = await post('/api/tests/local', { target: 'tests/utils/test_versions_utils.py', pytest_args: '', refresh: true });
+      if (r.error) return flash(r.error, true);
+      runLogs[r.run.id] = { offset: 0, text: '', open: true };
+      flash(`rebuilding deps (run ${r.run.id})`); renderRuns();
+    }
+
+    const post = (path, body) => fetch(path, { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ repo: REPO, number: NUMBER, ...body }) }).then(r => r.json()).catch(() => ({ error: 'request failed' }));
+
+    function flash(text, bad) {
+      let el = document.getElementById('t-flash');
+      if (!el) { el = document.createElement('div'); el.id = 't-flash'; document.getElementById('t-form').appendChild(el); }
+      el.className = bad ? 'bad' : 'ok'; el.textContent = text;
+      clearTimeout(el._t); el._t = setTimeout(() => el.remove(), bad ? 9000 : 4000);
+    }
+
+    async function submitRun(btn) {
+      const target = T.target.trim();
+      if (!target) return flash('give a pytest target first', true);
+      if (T.where !== 'local' && !SMALL.has(T.flavor) && T.where === 'job' && btn.dataset.armed !== '1') {
+        btn.dataset.armed = '1'; btn.textContent = `confirm ${T.flavor}`; btn.classList.add('arm');
+        setTimeout(() => { btn.dataset.armed = ''; btn.classList.remove('arm'); syncWhere(); }, 6000); return;
+      }
+      btn.disabled = true; btn.dataset.armed = ''; btn.classList.remove('arm'); const label = btn.textContent; btn.textContent = '…';
+      let r;
+      if (T.where === 'local') r = await post('/api/tests/local', { target, pytest_args: T.args });
+      else if (T.where === 'box') r = await post('/api/jobs/warm/run', { id: T.box, target, pytest_args: T.args });
+      else r = await post('/api/jobs/run-tests', { target, pytest_args: T.args, flavor: T.flavor, timeout: T.timeout });
+      btn.disabled = false; btn.textContent = label;
+      if (r.error) return flash(r.error, true);
+      if (r.run) { runLogs[r.run.id] = { offset: 0, text: '', open: true }; flash(`run ${r.run.id} started`); renderRuns(); }
+      else { flash(`job ${r.id} submitted on ${r.flavor}`); setTimeout(renderJobs, 1500); }
+    }
+
+    // ── Runs (local + box) ──
+    async function renderRuns() {
+      const host = document.getElementById('t-runs'); if (!host) return;
+      const d = await api('/api/tests/local').catch(() => ({ error: 'request failed' }));
+      if (d.error) { host.innerHTML = `<div class="panel-err">${escapeHtml(d.error)}</div>`; return; }
+      const cls = s => ({ passed: 'pass', failed: 'fail', running: 'pending' })[s] || 'skipping';
+      host.innerHTML = `<h4>Runs <span class="t-count">${d.runs.length}</span></h4>` +
+        (d.runs.map(r => `
+          <div class="chk ${cls(r.status)}" data-run="${r.id}">
             <span class="dot"></span>
-            <span class="nm" title="${escapeHtml(j.command)}"><b style="color:#e6edf3">${escapeHtml(j.stage)}</b> · ${escapeHtml(j.flavor)} · ${timeAgo(j.created_at)} · <span style="font-family:Menlo,monospace">${escapeHtml(j.labels && j.labels['gh-codepilot-kind'] === 'tests' ? 'pytest ' + (j.labels['gh-codepilot-target'] || '') : j.labels && j.labels['gh-codepilot-kind'] === 'shell' ? 'interactive shell' : j.command)}</span></span>
-            ${j.labels && j.labels['gh-codepilot-kind'] === 'shell' && /RUNNING/i.test(j.stage) ? `<button onclick="openShell(this, '${j.id}')">open terminal</button>` : ''}
-            <button onclick="toggleJobLog(this, '${j.id}')">logs</button>
-            ${/RUNNING|PENDING|STARTING/i.test(j.stage) ? `<button onclick="cancelJob(this, '${j.id}')">cancel</button>` : ''}
-            ${j.url ? `<a href="${j.url}" target="_blank">↗</a>` : ''}
-          </div>`).join('') || '<div class="panel-empty">No jobs yet for this PR.</div>'}
-        </div></div>`;
+            <span class="t-status">${escapeHtml(r.status)}</span>
+            <span class="t-where-tag">${r.box ? 'box ' + escapeHtml(r.box.slice(-6)) : 'local'}</span>
+            <span class="nm t-mono" title="${escapeHtml(r.target)}">${escapeHtml(r.pytest_args ? r.pytest_args + ' ' : '')}${escapeHtml(r.target)}</span>
+            <span class="t-muted">${r.ended ? Math.round(r.ended - r.started) + 's' : timeAgo(new Date(r.started * 1000).toISOString()) + ' ago'}</span>
+            <button onclick="toggleRunLog('${r.id}')">${runLogs[r.id]?.open ? 'hide' : 'log'}</button>
+            ${r.status === 'running' ? `<button onclick="post('/api/tests/local/cancel',{id:'${r.id}'}).then(renderRuns)">cancel</button>` : ''}
+          </div>${runLogs[r.id]?.open ? `<pre class="chk-log" id="rl-${r.id}"></pre>` : ''}`).join('')
+        || '<div class="t-empty">No runs yet. Pick a target above and press Run, or type <code>/test …</code> in the session.</div>');
+      for (const r of d.runs) if (runLogs[r.id]?.open) pumpRunLog(r.id);
+      if (d.runs.some(r => r.status === 'running')) { clearTimeout(renderRuns._t); renderRuns._t = setTimeout(renderRuns, 2500); }
     }
-    // Test files touched by the PR, from the cached diff text.
-    function guessTestTarget() {
-      const t = lastDiffText || '';
-      const files = [...new Set([...t.matchAll(/^\+\+\+ b\/(tests\/\S+\.py)$/gm)].map(m => m[1]))];
-      return files.slice(0, 6).join(' ');
+    async function pumpRunLog(id) {
+      const st = runLogs[id]; const pre = document.getElementById(`rl-${id}`); if (!st || !pre) return;
+      const d = await fetch(`/api/tests/local/log?id=${id}&offset=${st.offset}`).then(r => r.json()).catch(() => ({}));
+      if (d.text) { st.text += d.text; st.offset = d.offset; }
+      pre.innerHTML = escapeHtml(st.text.slice(-60000) || '(no output yet)').replace(/^(FAILED .*|ERROR .*|Traceback.*|E\s{2,}.*|.*Error: .*)$/gm, '<span class="hl">$1</span>')
+        .replace(/^(PASSED .*|=+ .*passed.* =+)$/gm, '<span class="ok">$1</span>');
+      pre.scrollTop = pre.scrollHeight;
     }
-    function rememberRt() {
-      window.__rtTarget = document.getElementById('rt-target').value;
-      window.__rtFlavor = document.getElementById('rt-flavor').value;
-      window.__rtTimeout = document.getElementById('rt-timeout').value;
-      window.__rtArgs = document.getElementById('rt-args').value;
+    function toggleRunLog(id) { runLogs[id] = runLogs[id] || { offset: 0, text: '', open: false }; runLogs[id].open = !runLogs[id].open; renderRuns(); }
+
+    // ── Boxes (running shell jobs, any PR) ──
+    async function renderBoxes() {
+      const host = document.getElementById('t-boxes'); if (!host) return;
+      const d = await fetch('/api/jobs/warm').then(r => r.json()).catch(() => ({ error: 'request failed' }));
+      if (d.error) { host.innerHTML = `<div class="panel-err">${escapeHtml(d.error)}</div>`; return; }
+      boxes = d.boxes; syncWhere();
+      host.innerHTML = `<h4>Boxes <span class="t-count">${boxes.length}</span>
+          <span class="t-muted t-h4note">a box is a running HF Job with sshd + a browser terminal, PR checked out in /work; runs on it take seconds${d.ssh_ready ? '' : ' · local cloudflared missing, ssh disabled'}</span></h4>` +
+        boxes.map(b => `
+          <div class="chk pending" data-id="${b.id}">
+            <span class="dot"></span>
+            <span class="t-status">${escapeHtml(b.flavor)}</span>
+            <span class="nm"><span class="t-mono">${b.id}</span> <span class="t-muted">· up ${timeAgo(b.created_at)} · started for ${escapeHtml(b.for.replace(/^.*--/, '#'))}</span></span>
+            <button onclick="T.where='box';T.box='${b.id}';saveT();syncWhere();document.getElementById('t-target').focus()">use for runs</button>
+            <button onclick="openShell(this, '${b.id}')">terminal</button>
+            <button onclick="cancelJob(this, '${b.id}')">stop</button>
+            ${b.url ? `<a href="${b.url}" target="_blank">↗</a>` : ''}
+          </div>`).join('') +
+        `<div class="t-start">
+          <span class="t-muted">start a box:</span>
+          <select id="t-box-flavor">${FLAVORS.map(f => `<option value="${f}" ${f === (T.boxFlavor || 'a10g-small') ? 'selected' : ''}>${f}${PRICE[f] ? ' · ' + PRICE[f] : ''}</option>`).join('')}</select>
+          <select id="t-box-timeout">${['1h','2h','4h','8h'].map(t => `<option ${t === (T.boxTimeout || '2h') ? 'selected' : ''}>${t}</option>`).join('')}</select>
+          <button onclick="startBox(this)">Start box</button>
+          <span class="t-muted">2–5 min to come up, billed until stopped or timed out</span>
+        </div>`;
     }
-    async function runTests(btn) {
-      rememberRt();
-      const msg = document.getElementById('rt-msg');
-      const target = window.__rtTarget.trim(), flavor = window.__rtFlavor;
-      if (!target) { msg.innerHTML = '<span style="color:#f85149">Give a pytest target first.</span>'; return; }
-      const big = !['cpu-basic','cpu-upgrade','t4-small','t4-medium','l4x1','a10g-small'].includes(flavor);
-      if (big && btn.dataset.armed !== '1') {
-        btn.dataset.armed = '1'; btn.textContent = `confirm ${flavor}`; btn.style.borderColor = '#d29922';
-        setTimeout(() => { btn.dataset.armed = ''; btn.textContent = 'Run'; btn.style.borderColor = ''; }, 6000);
-        return;
+    async function startBox(btn) {
+      const flavor = document.getElementById('t-box-flavor').value, timeout = document.getElementById('t-box-timeout').value;
+      T.boxFlavor = flavor; T.boxTimeout = timeout; saveT();
+      if (!SMALL.has(flavor) && btn.dataset.armed !== '1') {
+        btn.dataset.armed = '1'; btn.textContent = `confirm ${flavor}`; btn.classList.add('arm');
+        setTimeout(() => { btn.dataset.armed = ''; btn.textContent = 'Start box'; btn.classList.remove('arm'); }, 6000); return;
       }
-      btn.disabled = true; btn.textContent = 'submitting…'; btn.dataset.armed = '';
-      const r = await fetch('/api/jobs/run-tests', { method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ repo: REPO, number: NUMBER, target, flavor, timeout: window.__rtTimeout, pytest_args: window.__rtArgs }) }).then(x => x.json()).catch(() => ({ error: 'request failed' }));
-      btn.disabled = false; btn.textContent = 'Run'; btn.style.borderColor = '';
-      if (r.error) { msg.innerHTML = `<span style="color:#f85149">${escapeHtml(r.error)}</span>`; return; }
-      msg.innerHTML = `<span style="color:#3fb950">submitted ${escapeHtml(r.id || '')} on ${escapeHtml(r.flavor)}</span>`;
-      setTimeout(loadJobs, 1500);
-    }
-    async function startShell(btn) {
-      rememberRt();
-      const msg = document.getElementById('rt-msg');
-      const flavor = window.__rtFlavor;
-      const big = !['cpu-basic','cpu-upgrade','t4-small','t4-medium','l4x1','a10g-small'].includes(flavor);
-      if (big && btn.dataset.armed !== '1') {
-        btn.dataset.armed = '1'; btn.textContent = `confirm ${flavor}`; btn.style.borderColor = '#d29922';
-        setTimeout(() => { btn.dataset.armed = ''; btn.textContent = 'Start shell'; btn.style.borderColor = ''; }, 6000);
-        return;
-      }
-      btn.disabled = true; btn.textContent = 'starting…'; btn.dataset.armed = '';
-      const r = await fetch('/api/jobs/shell', { method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ repo: REPO, number: NUMBER, flavor, timeout: '2h' }) }).then(x => x.json()).catch(() => ({ error: 'request failed' }));
-      btn.disabled = false; btn.textContent = 'Start shell'; btn.style.borderColor = '';
-      if (r.error) { msg.innerHTML = `<span style="color:#f85149">${escapeHtml(r.error)}</span>`; return; }
-      msg.innerHTML = `<span style="color:#3fb950">box ${escapeHtml(r.id || '')} starting on ${escapeHtml(r.flavor)} — scheduling takes a few minutes; "open terminal" appears on the row once it is running.</span>`;
-      setTimeout(loadJobs, 1500);
+      btn.disabled = true; btn.textContent = '…';
+      const r = await post('/api/jobs/shell', { flavor, timeout });
+      btn.disabled = false; btn.textContent = 'Start box'; btn.classList.remove('arm'); btn.dataset.armed = '';
+      if (r.error) return flash(r.error, true);
+      flash(`box ${r.id} starting on ${r.flavor}; it appears under Boxes once running`);
+      setTimeout(renderJobs, 1500);
     }
     async function openShell(btn, id) {
       btn.disabled = true; const t = btn.textContent; btn.textContent = '…';
       const d = await fetch(`/api/jobs/shell-info?id=${id}`).then(r => r.json()).catch(() => ({}));
       btn.disabled = false; btn.textContent = t;
       const host = btn.closest('.chk'); const old = host.nextElementSibling;
-      if (old && old.classList.contains('chk-log')) old.remove();
+      if (old && old.classList.contains('chk-log')) { old.remove(); return; }
       const pre = document.createElement('pre'); pre.className = 'chk-log';
-      if (!d.web) { pre.textContent = d.ready ? 'tunnel not up yet, retry in a few seconds' : 'box still setting up (sshd, tunnels, checkout) — retry in a minute'; host.after(pre); return; }
-      pre.innerHTML = `browser terminal: <a href="${d.web}" target="_blank">${d.web}</a>  user <b>${escapeHtml(d.web_user)}</b>  pass <b>${escapeHtml(d.web_pass || '')}</b>
-ssh (needs local cloudflared): <code>codepilot-shell --attach ${id}</code>
-PR checkout is in /work. ${d.ready ? 'Setup finished.' : 'pip install still running; pytest may not work yet.'}`;
+      if (!d.web) pre.textContent = d.ready ? 'tunnel not up yet, retry in a few seconds' : 'box still setting up (sshd, tunnels, checkout) — retry in a minute';
+      else pre.innerHTML = `browser terminal  <a href="${d.web}" target="_blank">${d.web}</a>   user <b>${escapeHtml(d.web_user)}</b>  pass <b>${escapeHtml(d.web_pass || '')}</b>
+ssh               <code>codepilot-shell --attach ${id}</code>
+run tests here    <code>/test tests/… --box ${id}</code>
+${d.ready ? 'Setup finished; /work is the PR checkout.' : 'pip install still running; pytest may not work yet.'}`;
       host.after(pre);
+    }
+
+    // ── HF Jobs history for this PR ──
+    async function renderJobs() {
+      const host = document.getElementById('t-jobs'); if (!host) return;
+      const d = await api('/api/jobs');
+      if (d.error) { host.innerHTML = `<div class="panel-err">${escapeHtml(d.error)}</div>`; return; }
+      const n = document.getElementById('jobs-n');
+      const live = d.jobs.filter(j => running.test(j.stage)).length;
+      n.textContent = live || ''; n.classList.toggle('bad', false);
+      const cls = s => /COMPLETED/i.test(s) ? 'pass' : /ERROR|FAILED/i.test(s) ? 'fail' : running.test(s) ? 'pending' : 'skipping';
+      const kind = j => (j.labels || {})['gh-codepilot-kind'];
+      const what = j => kind(j) === 'tests' ? 'pytest ' + ((j.labels || {})['gh-codepilot-target'] || '') : kind(j) === 'shell' ? 'box (interactive)' : j.command;
+      host.innerHTML = `<h4>HF Jobs for this PR <span class="t-count">${d.jobs.length}</span>
+          <span class="t-muted t-h4note">one-shot test jobs and boxes started from here; label <span class="t-mono">${escapeHtml(d.label)}</span></span></h4>` +
+        (d.jobs.map(j => `
+          <div class="chk ${cls(j.stage)}" data-id="${j.id}">
+            <span class="dot"></span>
+            <span class="t-status">${escapeHtml(j.stage.toLowerCase())}</span>
+            <span class="t-where-tag">${escapeHtml(j.flavor)}</span>
+            <span class="nm t-mono" title="${escapeHtml(j.command)}">${escapeHtml(what(j))}</span>
+            <span class="t-muted">${timeAgo(j.created_at)} ago</span>
+            ${kind(j) === 'shell' && /RUNNING/i.test(j.stage) ? `<button onclick="openShell(this, '${j.id}')">terminal</button>` : ''}
+            <button onclick="toggleJobLog(this, '${j.id}')">log</button>
+            ${running.test(j.stage) ? `<button onclick="cancelJob(this, '${j.id}')">cancel</button>` : ''}
+            ${j.url ? `<a href="${j.url}" target="_blank">↗</a>` : ''}
+          </div>`).join('') || '<div class="t-empty">No HF Jobs yet for this PR.</div>');
     }
     async function toggleJobLog(btn, id) {
       const host = btn.closest('.chk'); const existing = host.nextElementSibling;
-      if (existing && existing.classList.contains('chk-log')) { existing.remove(); btn.textContent = 'logs'; return; }
+      if (existing && existing.classList.contains('chk-log')) { existing.remove(); btn.textContent = 'log'; return; }
       btn.textContent = '…'; btn.disabled = true;
       const d = await fetch(`/api/jobs/logs?id=${id}`).then(r => r.json());
       btn.disabled = false; btn.textContent = 'hide';
       const pre = document.createElement('pre'); pre.className = 'chk-log';
-      pre.innerHTML = d.error ? `<span class="hl">${escapeHtml(d.error)}</span>` : escapeHtml(d.log || '(no output yet)').replace(/^(Traceback.*|.*Error: .*|E\s{2,}.*)$/gm, '<span class="hl">$1</span>');
+      pre.innerHTML = d.error ? `<span class="hl">${escapeHtml(d.error)}</span>` : escapeHtml(d.log || '(no output yet)').replace(/^(Traceback.*|.*Error: .*|E\s{2,}.*|FAILED .*)$/gm, '<span class="hl">$1</span>');
       host.after(pre);
     }
     async function cancelJob(btn, id) {
-      // Two-step confirm, no browser dialog.
-      if (btn.dataset.armed !== '1') { btn.dataset.armed = '1'; btn.textContent = 'confirm cancel'; btn.style.borderColor = '#f85149'; setTimeout(() => { btn.dataset.armed = ''; btn.textContent = 'cancel'; btn.style.borderColor = ''; }, 5000); return; }
+      if (btn.dataset.armed !== '1') { btn.dataset.armed = '1'; const t = btn.textContent; btn.textContent = 'confirm'; btn.classList.add('arm'); setTimeout(() => { btn.dataset.armed = ''; btn.textContent = t; btn.classList.remove('arm'); }, 5000); return; }
       btn.disabled = true; btn.textContent = '…';
-      await fetch('/api/jobs/cancel', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id}) });
-      loadJobs();
+      await post('/api/jobs/cancel', { id });
+      renderBoxes(); renderJobs();
     }
-    setInterval(() => { if (view === 'jobs') loadJobs(); }, 20000);
+    function guessTestTarget() {
+      const t = lastDiffText || '';
+      return [...new Set([...t.matchAll(/^\+\+\+ b\/(tests\/\S+\.py)$/gm)].map(m => m[1]))].slice(0, 6).join(' ');
+    }
+    setInterval(() => { if (view === 'jobs') { renderBoxes(); renderJobs(); } }, 20000);
 
     // ── File tree ──
     const tree = document.getElementById('filetree');
@@ -1098,8 +1296,24 @@ PR checkout is in /work. ${d.ready ? 'Setup finished.' : 'pip install still runn
             <span class="rl-meta">@${escapeHtml(h.author || '')} · ${escapeHtml(h.age || '')}</span>
           </div>
           ${h.title && h.title !== omitTitle ? `<div class="rl-title">${escapeHtml(h.title)}</div>` : ''}
-          ${h.snippet ? `<div class="rl-snip">${md(h.snippet)}</div>` : ''}
+          ${h.snippet && h.source_type !== 'title' ? `<div class="rl-snip">${md(h.snippet)}</div>` : ''}
+          ${h.snippet && h.source_type !== 'title' && (h.snippet.endsWith('…') || h.snippet.length >= 150) ? `<a class="rl-more" href="#" onclick="return showFullHit(this, '${escapeHtml(h.source_type)}', '${escapeHtml(String(h.source_id || ''))}', ${Number(h.number) || 0})">show full ${escapeHtml((h.source_type || 'text').replace('_', ' '))}</a>` : ''}
         </div>`).join('');
+    }
+    async function showFullHit(a, kind, id, number) {
+      const card = a.closest('.rl-hit'); const snip = card.querySelector('.rl-snip');
+      if (card.dataset.full) {                       // toggle back to the snippet
+        snip.innerHTML = card.dataset.full === 'open' ? card.dataset.snippet : card.dataset.fullHtml;
+        card.dataset.full = card.dataset.full === 'open' ? 'closed' : 'open';
+        a.textContent = card.dataset.full === 'open' ? 'show less' : a.dataset.label;
+        return false;
+      }
+      a.dataset.label = a.textContent; a.textContent = 'loading…';
+      const d = await fetch(`/api/relore/full?repo=${encodeURIComponent(REPO)}&kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}&number=${number}`).then(r => r.json()).catch(() => ({ error: 'request failed' }));
+      if (d.error) { a.textContent = d.error; return false; }
+      card.dataset.snippet = snip.innerHTML; card.dataset.fullHtml = md(d.text || '(empty)'); card.dataset.full = 'open';
+      snip.innerHTML = card.dataset.fullHtml; a.textContent = 'show less';
+      return false;
     }
 
     // ── relore why popover ──

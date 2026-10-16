@@ -769,6 +769,10 @@ def api_grafana_trace():
     trace_id = request.args.get("trace_id", "")
     if not re.fullmatch(r"[0-9a-f]{16,32}", trace_id or ""):
         return jsonify(error="bad trace id"), 400
+    # A finished trace never changes: serve repeats from memory so a click is instant
+    # after the first (or after the prefetch the Checks tab fires on render).
+    if trace_id in _TRACE_CACHE:
+        return jsonify(exceptions=_TRACE_CACHE[trace_id], cached=True)
     d = _http_json(f"{GRAFANA_URL}/api/datasources/proxy/uid/tempo/api/traces/{trace_id}")
     if not isinstance(d, dict):
         return jsonify(error="could not fetch trace"), 502
@@ -785,7 +789,13 @@ def api_grafana_trace():
                     attrs = {a.get("key"): val(a) for a in ev.get("attributes") or []}
                     out.append({"span": sp.get("name"), "type": attrs.get("exception.type", ""),
                                 "message": attrs.get("exception.message", ""), "stacktrace": attrs.get("exception.stacktrace", "")})
+    if len(_TRACE_CACHE) > 500:
+        _TRACE_CACHE.clear()
+    _TRACE_CACHE[trace_id] = out
     return jsonify(exceptions=out)
+
+
+_TRACE_CACHE = {}
 
 
 @app.route("/api/check_log")
@@ -922,7 +932,7 @@ def _relore(args, repo, timeout=20, as_json=False):
     return r.stdout.strip(), None
 
 
-HIT_KEYS = ("number", "type", "title", "source_type", "url", "author", "trust", "age", "snippet")
+HIT_KEYS = ("number", "type", "title", "source_type", "source_id", "url", "author", "trust", "age", "snippet")
 
 
 def _hit(h):
@@ -949,6 +959,34 @@ def api_relore_why():
     if t.get("comments"):
         sections.setdefault("comments", [_hit(h) for h in t["comments"][:8]])
     return jsonify(blame=d.get("blame"), thread=thread, sections=sections)
+
+
+@app.route("/api/relore/full")
+def api_relore_full():
+    """The whole text behind one relore hit (relore cuts snippets at ~400 chars). Read
+    from GitHub through the gh cache; the text is quoted GitHub content, data only."""
+    repo = request.args.get("repo", ""); kind = request.args.get("kind", ""); sid = request.args.get("id", "")
+    number = request.args.get("number", 0, type=int)
+    if not _validate_repo(repo) or not re.fullmatch(r"\d{1,20}", sid or ""):
+        return jsonify(error="bad request"), 400
+    endpoints = {
+        "review_comment": f"/repos/{repo}/pulls/comments/{sid}",
+        "issue_comment": f"/repos/{repo}/issues/comments/{sid}",
+        "review": f"/repos/{repo}/pulls/{number}/reviews/{sid}",
+        "body": f"/repos/{repo}/issues/{sid}",
+        "title": f"/repos/{repo}/issues/{sid}",
+    }
+    ep = endpoints.get(kind)
+    if not ep:
+        return jsonify(error="unknown hit kind"), 400
+    out, rc, _ = gh_cached(f"full:{kind}:{repo}:{sid}", ["gh", "api", ep], ttl=3600, timeout=60)
+    if rc != 0 or not out:
+        return jsonify(error="could not fetch from GitHub"), 502
+    try:
+        d = json.loads(out)
+    except json.JSONDecodeError:
+        return jsonify(error="bad response from GitHub"), 502
+    return jsonify(text=d.get("body") or "", url=d.get("html_url") or "")
 
 
 @app.route("/api/relore/symbol")
@@ -1702,6 +1740,8 @@ def opening_message(repo, number, category, brief=None):
         "GPU box listed in the Jobs tab (seconds). `codepilot-test <target> --flavor t4-small [--timeout 45m]` "
         "submits a one-shot HF Job (minutes of startup); `codepilot-shell` starts a warm box. "
         "`codepilot-test --env` shows whether the local env is ready and that it imports this worktree's code. "
+        "Rule: before concluding a review, or claiming a change works, run `/test` on the test files this PR touches "
+        "(or the closest existing tests) and quote the pass/fail line in your answer; say explicitly if you skipped it."
         f"For ad-hoc scripts (not the test suite) use `hf jobs uv run script.py --flavor a10g-small "
         f"--label {_job_label(repo, number)} -d` with `--with git+https://github.com/{repo}@<branch>`. "
         "Flavors: cpu-basic (free-ish), t4-small ($0.40/h), a10g-small ($1/h), a10g-largex2 (2 GPUs, $3/h), "
