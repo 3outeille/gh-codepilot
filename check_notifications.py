@@ -51,8 +51,23 @@ def load_repos():
     return repos
 
 
+def _find_gh():
+    """cron runs with a bare PATH, so look where Homebrew and installers put gh."""
+    import shutil
+    found = shutil.which("gh")
+    if found:
+        return found
+    for cand in ("/opt/homebrew/bin/gh", "/usr/local/bin/gh", str(Path.home() / ".local/bin/gh")):
+        if Path(cand).exists():
+            return cand
+    return "gh"
+
+
+GH = _find_gh()
+
+
 def gh_api(endpoint):
-    result = subprocess.run(["gh", "api", endpoint], capture_output=True, text=True)
+    result = subprocess.run([GH, "api", endpoint], capture_output=True, text=True)
     if result.returncode != 0:
         return None
     try:
@@ -62,7 +77,7 @@ def gh_api(endpoint):
 
 
 def gh_cli(args):
-    result = subprocess.run(["gh"] + args, capture_output=True, text=True)
+    result = subprocess.run([GH] + args, capture_output=True, text=True)
     if result.returncode != 0:
         return None
     try:
@@ -136,7 +151,7 @@ def gh_user():
     """Current authenticated GitHub login, cached per process."""
     global _GH_USER
     if _GH_USER is None:
-        result = subprocess.run(["gh", "api", "user", "-q", ".login"],
+        result = subprocess.run([GH, "api", "user", "-q", ".login"],
                                 capture_output=True, text=True)
         _GH_USER = result.stdout.strip() if result.returncode == 0 else ""
     return _GH_USER

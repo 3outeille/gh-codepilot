@@ -121,7 +121,8 @@
   <header>
     <h1>Board</h1>
     <div class="meta">
-      <span>updated <time id="updated" datetime="{{ server_time }}"></time></span>
+      <span title="When the GitHub sync last wrote the board data">synced <time id="updated" datetime="{{ synced_at or server_time }}"></time></span>
+      <button class="btn" id="sync-btn" onclick="syncNow()" title="Re-read GitHub now instead of waiting for the 10-minute cron">Sync now</button>
       <a href="/list">list view</a>
     </div>
   </header>
@@ -172,7 +173,7 @@
     <div class="card-foot">
       <span class="by">by @{{ item.author }}</span>
       <div class="actions">
-        <a class="claude" href="/terminal?repo={{ item.repo }}&number={{ item.number }}&type={{ item.category }}&title={{ item.title | urlencode }}">Claude</a>
+        <a class="claude" href="/terminal?repo={{ item.repo }}&number={{ item.number }}&type={{ item.category }}&title={{ item.title | urlencode }}">Review</a>
         {% if item.relation == 'mentioned' %}
         <button onclick="markSeen('{{ key }}', this)">Seen</button>
         {% endif %}
@@ -314,6 +315,22 @@
         location.reload();
       }
     }
+
+    // ── Sync now: run the collector, reload when the data file changes ──
+    async function syncNow() {
+      const btn = document.getElementById('sync-btn');
+      btn.disabled = true; btn.textContent = 'Syncing…';
+      const before = (await fetch('/api/sync', { method: 'POST' }).then(r => r.json())).synced_at;
+      const poll = setInterval(async () => {
+        const st = await fetch('/api/sync').then(r => r.json()).catch(() => null);
+        if (!st) return;
+        if (st.synced_at !== before) { clearInterval(poll); location.reload(); }
+        else if (!st.running) { clearInterval(poll); btn.disabled = false; btn.textContent = 'Sync failed — see cron.log'; }
+      }, 4000);
+    }
+    (async function () {   // a sync already running elsewhere: show it
+      try { const st = await fetch('/api/sync').then(r => r.json()); if (st.running) { const b = document.getElementById('sync-btn'); b.disabled = true; b.textContent = 'Syncing…'; } } catch (e) {}
+    })();
 
     // ── Views: My PRs / Reviewing / Mentions ──
     function setView(v, push) {

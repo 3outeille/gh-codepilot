@@ -13,6 +13,7 @@ from flask_socketio import SocketIO, emit
 import re
 import shlex
 import subprocess
+import sys
 import time
 
 import local_runner
@@ -234,11 +235,10 @@ def route_item(item, seen):
         my_state = item.get("my_review_state", "")
         my_at = item.get("my_review_at", "")
         author_at = item.get("last_author_at", "")
-        if rel == "review_requested" or not my_at:
-            # GitHub drops you from the request once you review; a request that is
-            # back means the author re-requested after your last review.
-            again = " again" if my_at else ""
-            return ("reviewing", "to_review", f"review requested{again} · {waited}d", stale)
+        if not my_at:
+            return ("reviewing", "to_review", f"review requested · {waited}d", stale)
+        # A comment-only review leaves the review request in place on GitHub, so
+        # the request flag says nothing once you have reviewed: go by who spoke last.
         if my_state == "APPROVED":
             return ("reviewing", "approved", f"you approved · {_age_days(my_at)}d{ci_suffix}", False)
         if author_at > my_at:
@@ -394,7 +394,32 @@ def board():
         active_view=request.args.get("view", ""),
         sort=sort,
         server_time=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        synced_at=datetime.fromtimestamp(ITEMS_FILE.stat().st_mtime, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if ITEMS_FILE.exists() else "",
     )
+
+
+_SYNC_PROC = None
+
+
+def _sync_running():
+    global _SYNC_PROC
+    if _SYNC_PROC is not None and _SYNC_PROC.poll() is None:
+        return True
+    _SYNC_PROC = None
+    return False
+
+
+@app.route("/api/sync", methods=["GET", "POST"])
+def api_sync():
+    """Board data comes from check_notifications.py (cron, every 10 min). POST runs
+    it now, in the background; GET reports whether it is running and when the
+    open-items file was last written."""
+    global _SYNC_PROC
+    if request.method == "POST" and not _sync_running():
+        _SYNC_PROC = subprocess.Popen([sys.executable, str(BASE_DIR / "check_notifications.py")],
+                                      cwd=str(BASE_DIR), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    mtime = ITEMS_FILE.stat().st_mtime if ITEMS_FILE.exists() else 0
+    return jsonify(running=_sync_running(), synced_at=datetime.fromtimestamp(mtime, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if mtime else None)
 
 
 @app.route("/api/seen", methods=["POST"])
