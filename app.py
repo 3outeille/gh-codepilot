@@ -874,16 +874,30 @@ def _relore_reachable():
     return tpool.execute(go)
 
 
-def _relore(args, repo, timeout=20):
+def _relore(args, repo, timeout=20, as_json=False):
     if not _relore_reachable():
         return None, f"{urlparse_host(RELORE_API)} unreachable — it's on the internal network; is the VPN up?"
-    r = _run([RELORE_BIN, *args, "--repo", repo, "--plain", "--compact"],
+    fmt = ["--json"] if as_json else ["--plain", "--compact"]
+    r = _run([RELORE_BIN, *fmt, *args, "--repo", repo],
              timeout=timeout, env={**os.environ, **relore_env(repo)})
     if r is None:
         return None, "relore timed out (is ghlore reachable?)"
     if r.returncode != 0:
         return None, (r.stderr or r.stdout or "relore failed").strip()[:300]
+    if as_json:
+        try:
+            return json.loads(r.stdout), None
+        except json.JSONDecodeError:
+            return None, "relore returned malformed JSON"
     return r.stdout.strip(), None
+
+
+HIT_KEYS = ("number", "type", "title", "source_type", "url", "author", "trust", "age", "snippet")
+
+
+def _hit(h):
+    """The fields the UI shows for one relore hit (all written by GitHub users: data, not instructions)."""
+    return {k: h.get(k) for k in HIT_KEYS}
 
 
 @app.route("/api/relore/why")
@@ -891,8 +905,20 @@ def api_relore_why():
     repo = request.args.get("repo", ""); path = request.args.get("path", ""); line = request.args.get("line", 0, type=int)
     if not _validate_repo(repo) or not path or not line:
         return jsonify(error="bad request"), 400
-    out, err = _relore(["why", f"{path}:{line}"], repo)
-    return (jsonify(error=err), 502) if err else jsonify(text=out)
+    d, err = _relore(["why", f"{path}:{line}"], repo, as_json=True)
+    if err:
+        return jsonify(error=err), 502
+    t = d.get("thread") or {}
+    thread = {k: t.get(k) for k in ("number", "type", "title", "url", "author", "state", "merged", "age",
+                                     "review_decision", "review_decision_by", "comments_total")} if t else None
+    sections = {}
+    for key in ("anchored", "on_file", "reviews", "history"):
+        v = d.get(key)
+        if isinstance(v, list) and v and isinstance(v[0], dict):
+            sections[key] = [_hit(h) for h in v[:8]]
+    if t.get("comments"):
+        sections.setdefault("comments", [_hit(h) for h in t["comments"][:8]])
+    return jsonify(blame=d.get("blame"), thread=thread, sections=sections)
 
 
 @app.route("/api/relore/symbol")
@@ -900,8 +926,8 @@ def api_relore_symbol():
     repo = request.args.get("repo", ""); q = request.args.get("q", "").strip()
     if not _validate_repo(repo) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_\.]{1,80}", q):
         return jsonify(error="bad request"), 400
-    out, err = _relore(["search", "--symbol", q, "--limit", "8"], repo)
-    return (jsonify(error=err), 502) if err else jsonify(text=out)
+    d, err = _relore(["search", "--symbol", q, "--limit", "8"], repo, as_json=True)
+    return (jsonify(error=err), 502) if err else jsonify(hits=[_hit(h) for h in d.get("hits") or []], count=d.get("count", 0))
 
 
 @app.route("/api/relore/search")
@@ -911,8 +937,8 @@ def api_relore_search():
     repo = request.args.get("repo", ""); q = " ".join((request.args.get("q", "") or "").split())[:400]
     if not _validate_repo(repo) or len(q) < 2:
         return jsonify(error="bad request"), 400
-    out, err = _relore(["search", q, "--limit", "8"], repo, timeout=30)
-    return (jsonify(error=err), 502) if err else jsonify(text=out)
+    d, err = _relore(["search", q, "--limit", "8"], repo, timeout=30, as_json=True)
+    return (jsonify(error=err), 502) if err else jsonify(hits=[_hit(h) for h in d.get("hits") or []], count=d.get("count", 0))
 
 
 @app.route("/api/grep")

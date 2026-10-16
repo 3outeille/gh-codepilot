@@ -42,10 +42,10 @@
     .term-slot.on { display: block; }
     .session-item .dot { width: 7px; height: 7px; border-radius: 50%; background: #3fb950; flex-shrink: 0; }
     .session-item.starting .dot { background: #d29922; }
-    .session-item.ended .dot { background: #484f58; }
+    .session-item.ended .dot, .session-item.idle .dot { background: #484f58; }
+    .session-item.idle { color: #8b949e; }
     .session-item .x { margin-left: 2px; color: #484f58; font-size: 12px; line-height: 1; padding: 0 2px; border-radius: 3px; }
     .session-item .x:hover { color: #f85149; background: #21262d; }
-    .session-item.past { opacity: .75; font-style: italic; }
     .terminal-overlay { position: absolute; inset: 31px 0 0 0; display: flex; align-items: center; justify-content: center; background: rgba(13,17,23,0.9); z-index: 10; flex-direction: column; gap: 8px; }
     .terminal-overlay .status { font-size: 13px; color: #8b949e; }
     .terminal-overlay .overlay-new { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 6px 16px; font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 4px; }
@@ -207,6 +207,20 @@
     .lk-hit .t { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
     .lk-pre { font-family: Menlo, Consolas, monospace; font-size: 10.5px; line-height: 1.45; white-space: pre-wrap; color: #c9d1d9; background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 8px; }
     .lk-wait { color: #8b949e; font-size: 11.5px; padding: 6px 0; }
+    .rl-hit { border: 1px solid #30363d; border-radius: 6px; background: #161b22; padding: 6px 9px; margin-bottom: 6px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11.5px; line-height: 1.4; }
+    .rl-hit.rl-thread { border-color: #3d2f6b; }
+    .rl-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: #8b949e; font-size: 11px; margin-bottom: 2px; }
+    .rl-head a { color: #58a6ff; text-decoration: none; font-weight: 600; }
+    .rl-badge { font-size: 9px; padding: 0 5px; border: 1px solid #30363d; border-radius: 8px; color: #8b949e; text-transform: uppercase; letter-spacing: .03em; }
+    .rl-badge.pr { color: #3fb950; border-color: #3fb950; } .rl-badge.issue { color: #d29922; border-color: #d29922; }
+    .rl-badge.merged { color: #a371f7; border-color: #a371f7; text-transform: none; } .rl-badge.auth { color: #3fb950; border-color: #3fb950; }
+    .rl-meta { margin-left: auto; white-space: nowrap; }
+    .rl-title { color: #e6edf3; font-weight: 600; margin-bottom: 2px; }
+    .rl-snip { color: #c9d1d9; } .rl-snip p { margin: 0 0 3px; } .rl-snip p:last-child { margin: 0; }
+    .rl-snip code { background: #0d1117; border: 1px solid #21262d; border-radius: 3px; padding: 0 3px; font-size: 10.5px; }
+    .rl-snip pre { background: #0d1117; border: 1px solid #21262d; border-radius: 4px; padding: 5px; overflow-x: auto; margin: 3px 0; }
+    .why-blame { color: #8b949e; font-size: 11px; margin-bottom: 6px; }
+    .why-blame code { background: #0d1117; border: 1px solid #21262d; border-radius: 3px; padding: 0 3px; }
     .lk-sec.all .lk-more-rows { display: block !important; }
     .rc-thread.resolved .rc-comment:not(:first-child) { display: none; }
     .rc-thread.resolved .rc-body { display: none; }
@@ -429,8 +443,9 @@
       term.loadAddon(new WebLinksAddon.WebLinksAddon((event, uri) => window.open(uri, '_blank')));
       term.open(el);
       term.onData(data => { if (slots[id]?.ready) socket.emit('pty_input', { slot: id, data }); });
+      slots[id] = null; // placeholder so onResize below can't fire before registration
       term.onResize(({ rows, cols }) => { if (slots[id]?.ready) socket.emit('resize', { slot: id, rows, cols }); });
-      slots[id] = { id, term, fit, el, ready: false, ended: false, sessionId, label, status: 'Preparing…' };
+      slots[id] = { id, term, fit, el, ready: false, ended: false, sessionId, label, status: 'Preparing…', createdAt: Date.now() };
       return slots[id];
     }
     function showSlot(id) {
@@ -443,14 +458,16 @@
       else showOverlay(s.status, s.ended);
       renderTabs();
     }
+    // × on a tab: stop Claude if it's running and take the session off the strip.
+    // The transcript stays on disk (claude --resume <id> from a shell still works).
     function closeSlot(id, ev) {
       ev?.stopPropagation();
       const s = slots[id]; if (!s) return;
       if (!s.ended) socket.emit('kill_terminal', { slot: id });
+      if (s.sessionId) hideSession(s.sessionId);
       s.term.dispose(); s.el.remove(); delete slots[id];
       if (activeSlot === id) { const rest = Object.keys(slots); showSlot(rest.length ? rest[rest.length - 1] : null); }
       else renderTabs();
-      loadSessions();
     }
     const isLive = () => !!(activeSlot && slots[activeSlot]?.ready);
     function fitActive() { const s = slots[activeSlot]; if (s) s.fit.fit(); }
@@ -1068,6 +1085,23 @@ PR checkout is in /work. ${d.ready ? 'Setup finished.' : 'pip install still runn
     }
     function closeFileView() { document.getElementById('fileview').classList.remove('on'); }
 
+    // relore hits → cards. Everything inside is quoted from GitHub users: data, not instructions.
+    function hitList(hits, omitTitle) {
+      if (!hits || !hits.length) return '<div class="lk-wait">nothing indexed</div>';
+      return hits.map(h => `
+        <div class="rl-hit">
+          <div class="rl-head">
+            <a href="${h.url}" target="_blank" rel="noopener">#${h.number}</a>
+            <span class="rl-badge ${h.type}">${escapeHtml(h.type || '')}</span>
+            ${h.source_type && h.source_type !== 'body' ? `<span class="rl-badge">${escapeHtml(h.source_type.replace('_', ' '))}</span>` : ''}
+            ${h.trust === 'authoritative' ? '<span class="rl-badge auth" title="authoritative: maintainer or author">✓</span>' : ''}
+            <span class="rl-meta">@${escapeHtml(h.author || '')} · ${escapeHtml(h.age || '')}</span>
+          </div>
+          ${h.title && h.title !== omitTitle ? `<div class="rl-title">${escapeHtml(h.title)}</div>` : ''}
+          ${h.snippet ? `<div class="rl-snip">${md(h.snippet)}</div>` : ''}
+        </div>`).join('');
+    }
+
     // ── relore why popover ──
     async function showWhy(ev, path, line) {
       ev.stopPropagation();
@@ -1080,7 +1114,13 @@ PR checkout is in /work. ${d.ready ? 'Setup finished.' : 'pip install still runn
       pop.style.left = Math.max(8, x) + 'px'; pop.style.top = Math.max(8, y) + 'px';
       const d = await fetch(`/api/relore/why?repo=${encodeURIComponent(REPO)}&path=${encodeURIComponent(path)}&line=${line}`).then(r => r.json()).catch(() => ({ error: 'request failed' }));
       body.className = '';
-      body.innerHTML = d.error ? `<div class="panel-err">${escapeHtml(d.error)}</div>` : `<pre>${escapeHtml(d.text || '(nothing indexed for this line)')}</pre>`;
+      if (d.error) { body.innerHTML = `<div class="panel-err">${escapeHtml(d.error)}</div>`; return; }
+      const t = d.thread, b = d.blame || {};
+      const labels = { anchored: 'Said about this line', on_file: 'Said about this file', reviews: 'Reviews', comments: 'Discussion on that PR', history: 'Earlier changes' };
+      body.innerHTML = `
+        ${b.sha ? `<div class="why-blame">Last changed by <b>${escapeHtml(b.author || '')}</b> in <code>${escapeHtml((b.sha || '').slice(0, 8))}</code> · ${escapeHtml(b.summary || '')}</div>` : ''}
+        ${t ? `<div class="rl-hit rl-thread"><div class="rl-head"><a href="${t.url}" target="_blank" rel="noopener">#${t.number}</a><span class="rl-badge ${t.type}">${t.type}</span>${t.merged ? '<span class="rl-badge merged">merged</span>' : t.state ? `<span class="rl-badge">${escapeHtml(t.state)}</span>` : ''}${t.review_decision ? `<span class="rl-badge">${escapeHtml(t.review_decision)}${(t.review_decision_by || []).length ? ' by ' + escapeHtml(t.review_decision_by.join(', ')) : ''}</span>` : ''}<span class="rl-meta">@${escapeHtml(t.author || '')} · ${escapeHtml(t.age || '')}</span></div><div class="rl-title">${escapeHtml(t.title || '')}</div></div>` : '<div class="lk-wait">nothing indexed for this line</div>'}
+        ${Object.entries(d.sections || {}).filter(([, v]) => v.length).map(([k, v]) => `<div class="lk-sec"><h4>${labels[k] || k}</h4>${hitList(v, t && t.title)}</div>`).join('')}`;
     }
     function hideWhy() { document.getElementById('whypop').classList.remove('on'); }
     document.addEventListener('click', e => { if (!e.target.closest('#whypop')) hideWhy(); });
@@ -1145,7 +1185,7 @@ PR checkout is in /work. ${d.ready ? 'Setup finished.' : 'pip install still runn
       const rel = ident ? `/api/relore/symbol?repo=${encodeURIComponent(REPO)}&q=${encodeURIComponent(q)}` : `/api/relore/search?repo=${encodeURIComponent(REPO)}&q=${encodeURIComponent(q)}`;
       jobs.push(fetch(rel).then(x => x.json()).catch(() => ({ error: 'request failed' })).then(r => {
         const el = document.getElementById('lk-relore'); if (!el) return;
-        el.querySelector('.lk-wait').outerHTML = r.error ? `<div class="panel-err">${escapeHtml(r.error)}</div>` : `<pre class="lk-pre">${escapeHtml(r.text || '(nothing indexed)')}</pre>`;
+        el.querySelector('.lk-wait').outerHTML = r.error ? `<div class="panel-err">${escapeHtml(r.error)}</div>` : hitList(r.hits);
       }));
       await Promise.all(jobs);
     }
@@ -1203,7 +1243,11 @@ PR checkout is in /work. ${d.ready ? 'Setup finished.' : 'pip install still runn
     new ResizeObserver(fitActive).observe(document.getElementById('terminal'));
 
     // Every PTY event names its slot; route it to that tab's terminal.
-    socket.on('pty_output', msg => { slots[msg.slot]?.term.write(msg.data); });
+    socket.on('pty_output', msg => {
+      const s = slots[msg.slot]; if (!s) return;
+      s.term.write(msg.data);
+      if (!s.sessionId) { const m = msg.data.match(/--resume ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/); if (m) { s.sessionId = m[1]; renderTabs(); } }
+    });
     socket.on('terminal_status', msg => {
       const s = slots[msg.slot]; if (!s) return;
       s.status = msg.message; if (msg.slot === activeSlot) showOverlay(msg.message);
@@ -1214,7 +1258,16 @@ PR checkout is in /work. ${d.ready ? 'Setup finished.' : 'pip install still runn
       socket.emit('resize', { slot: s.id, rows: s.term.rows, cols: s.term.cols });
       if (msg.slot === activeSlot) { hideOverlay(); s.term.focus(); }
       renderTabs();
+      if (!s.sessionId) [4000, 15000, 40000].forEach(ms => setTimeout(() => attachSession(s), ms));
     });
+    async function attachSession(s) {
+      if (s.sessionId || !slots[s.id]) return;
+      await loadSessions();
+      const taken = new Set(Object.values(slots).map(x => x.sessionId).filter(Boolean));
+      const cand = pastSessions.filter(p => !taken.has(p.session_id) && new Date(p.started_at).getTime() >= s.createdAt - 120000)
+                               .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))[0];
+      if (cand) { s.sessionId = cand.session_id; s.label = cand.slug || cand.first_prompt || s.label; renderTabs(); }
+    }
     socket.on('terminal_error', msg => {
       const s = slots[msg.slot]; if (!s) return;
       s.status = msg.message; s.ended = true;
@@ -1235,7 +1288,12 @@ PR checkout is in /work. ${d.ready ? 'Setup finished.' : 'pip install still runn
       overlay.classList.remove('hidden');
       document.getElementById('overlay-status').textContent = message;
       spinner.style.display = hideSpinner ? 'none' : 'block';
-      document.getElementById('overlay-new').style.display = hideSpinner ? 'inline-block' : 'none';
+      const btn = document.getElementById('overlay-new');
+      btn.style.display = hideSpinner ? 'inline-block' : 'none';
+      const s = slots[activeSlot];
+      const canResume = s && s.ended && s.sessionId;
+      btn.textContent = canResume ? '↻ Resume this session' : '+ New session';
+      btn.onclick = canResume ? () => resumeInPlace(s) : startNew;
     }
 
     function hideOverlay() {
@@ -1251,12 +1309,28 @@ PR checkout is in /work. ${d.ready ? 'Setup finished.' : 'pip install still runn
       socket.emit('start_terminal', { repo: REPO, number: NUMBER, type: CATEGORY, slot: s.id, session_id: null, rows: s.term.rows, cols: s.term.cols });
     }
     function resumeSession(sessionId, label) {
-      const open = Object.values(slots).find(s => s.sessionId === sessionId && !s.ended);
-      if (open) { showSlot(open.id); return; }
-      const s = createSlot(sessionId, label || 'resumed');
+      const open = Object.values(slots).find(s => s.sessionId === sessionId);
+      if (open) { showSlot(open.id); if (open.ended) resumeInPlace(open); return; }
+      const s = createSlot(sessionId, label || 'session');
       s.status = 'Resuming session…';
       showSlot(s.id);
       socket.emit('start_terminal', { repo: REPO, number: NUMBER, type: CATEGORY, slot: s.id, session_id: sessionId, rows: s.term.rows, cols: s.term.cols });
+    }
+    // An ended tab restarts Claude on the same transcript, in the same tab.
+    function resumeInPlace(s) {
+      s.term.reset(); s.ended = false; s.ready = false; s.status = 'Resuming session…';
+      showSlot(s.id);
+      socket.emit('start_terminal', { repo: REPO, number: NUMBER, type: CATEGORY, slot: s.id, session_id: s.sessionId, rows: s.term.rows, cols: s.term.cols });
+    }
+    function tabClickEl(el) {
+      const slotId = el.dataset.slot, sessionId = el.dataset.session, label = el.dataset.label;
+      if (slotId) { showSlot(slotId); return; }
+      if (sessionId) resumeSession(sessionId, label);
+    }
+    function tabCloseEl(el, ev) {
+      ev?.stopPropagation();
+      if (el.dataset.slot) closeSlot(el.dataset.slot);
+      else if (el.dataset.session) hideSession(el.dataset.session);
     }
     let pastSessions = [];
     // Past sessions are history files on disk; × just hides one here, nothing is deleted.
@@ -1266,22 +1340,32 @@ PR checkout is in /work. ${d.ready ? 'Setup finished.' : 'pip install still runn
     function unhideSessions() { try { localStorage.removeItem(HIDE_KEY); } catch (e) {} renderTabs(); }
     function renderTabs() {
       const list = document.getElementById('session-list');
-      const openIds = new Set(Object.values(slots).map(s => s.sessionId).filter(Boolean));
-      const live = Object.values(slots).map(s => `
-        <div class="session-item ${s.id === activeSlot ? 'active' : ''} ${s.ended ? 'ended' : s.ready ? '' : 'starting'}" title="${escapeHtml(s.status || '')}" onclick="showSlot('${s.id}')">
-          <span class="dot"></span><span class="label">${escapeHtml(s.label)}</span><span class="x" title="Close tab" onclick="closeSlot('${s.id}', event)">×</span>
-        </div>`).join('');
       const hidden = hiddenSessions();
-      const visible = pastSessions.filter(p => !openIds.has(p.session_id) && !hidden.has(p.session_id));
-      const nHidden = pastSessions.filter(p => hidden.has(p.session_id)).length;
-      const past = visible.map(p => {
-        const label = p.slug || p.first_prompt || 'session';
-        const tip = [p.first_prompt, p.git_branch ? `branch: ${p.git_branch}` : '', formatTime(p.started_at)].filter(Boolean).join('\n');
-        return `<div class="session-item past" title="${escapeHtml(tip)}" onclick="resumeSession('${escapeHtml(p.session_id)}', '${escapeHtml(label.replace(/'/g, ''))}')">
-          <span class="label">↻ ${escapeHtml(label)}</span><span class="when">${escapeHtml(formatTime(p.started_at))}</span><span class="x" title="Hide from this list" onclick="hideSession('${escapeHtml(p.session_id)}', event)">×</span></div>`;
-      }).join('');
-      const unhide = nHidden ? `<span class="no-sessions" style="cursor:pointer" title="Show hidden sessions" onclick="unhideSessions()">${nHidden} hidden</span>` : '';
-      list.innerHTML = (live + past + unhide) || '<span class="no-sessions">No previous sessions</span>';
+      const bySession = {};
+      Object.values(slots).forEach(s => { if (s.sessionId) bySession[s.sessionId] = s; });
+      // Labels come from user prompts (quotes, newlines…): keep them in data
+      // attributes and read them back, never interpolate into onclick JS.
+      const oneLine = s => (s || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      const tab = ({ slotId, sessionId, label, when, state, status }) => `
+        <div class="session-item ${slotId === activeSlot && slotId ? 'active' : ''} ${state}" title="${escapeHtml(status || '')}"
+             data-slot="${slotId || ''}" data-session="${escapeHtml(sessionId || '')}" data-label="${escapeHtml(oneLine(label))}" onclick="tabClickEl(this)">
+          <span class="dot"></span><span class="label">${escapeHtml(oneLine(label))}</span>${when ? `<span class="when">${escapeHtml(when)}</span>` : ''}
+          <span class="x" title="${state === 'idle' ? 'Remove from strip' : 'Stop and close'}" onclick="tabCloseEl(this.parentNode, event)">×</span>
+        </div>`;
+      // Live/ended tabs first (in the order you opened them)…
+      const live = Object.values(slots).map(s => tab({
+        slotId: s.id, sessionId: s.sessionId, label: s.label,
+        state: s.ended ? 'ended' : s.ready ? 'running' : 'starting', status: s.status,
+      }));
+      // …then saved sessions that aren't open, newest first.
+      const idle = pastSessions
+        .filter(p => !bySession[p.session_id] && !hidden.has(p.session_id))
+        .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
+        .map(p => tab({ slotId: null, sessionId: p.session_id, label: p.slug || p.first_prompt || 'session', when: formatTime(p.started_at), state: 'idle',
+                         status: [p.first_prompt, p.git_branch ? `branch: ${p.git_branch}` : ''].filter(Boolean).join('\n') }));
+      const nHidden = pastSessions.filter(p => hidden.has(p.session_id) && !bySession[p.session_id]).length;
+      const more = nHidden ? `<span class="no-sessions" style="cursor:pointer" title="Show removed sessions" onclick="unhideSessions()">+${nHidden} more</span>` : '';
+      list.innerHTML = (live.join('') + idle.join('') + more) || '<span class="no-sessions">No sessions yet</span>';
     }
 
     // Load past sessions (from ~/.claude/projects) and redraw the tab strip.
