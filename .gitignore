@@ -19,3 +19,11 @@ repos/
 .python-version
 cache/
 prereviews/
+
+# Local-only
+.venv/
+app.log
+seen.json
+*.orig
+*.bak-*
+bin/cloudflared

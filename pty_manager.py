@@ -1,5 +1,6 @@
 """PTY lifecycle management — spawns Claude Code in a pseudo-terminal and bridges I/O to SocketIO."""
 
+import codecs
 import errno
 import fcntl
 import os
@@ -85,6 +86,10 @@ def _pty_reader(sid, fd, socketio):
     slot attached so the page can route it to the right tab.
     """
     room, slot = _split(sid)
+    # Incremental decoder: a multi-byte UTF-8 sequence (box-drawing chars,
+    # emoji) can straddle two reads. Decoding chunks independently turns it
+    # into U+FFFD pairs, which also widens the line and breaks Ink's layout.
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
     while True:
         try:
             r, _, _ = select.select([fd], [], [], 1.0)
@@ -103,8 +108,13 @@ def _pty_reader(sid, fd, socketio):
             break
         if not data:
             break
-        socketio.emit("pty_output", {"slot": slot, "data": data.decode("utf-8", errors="replace")}, to=room)
+        text = decoder.decode(data)
+        if text:
+            socketio.emit("pty_output", {"slot": slot, "data": text}, to=room)
 
+    tail = decoder.decode(b"", final=True)
+    if tail:
+        socketio.emit("pty_output", {"slot": slot, "data": tail}, to=room)
     socketio.emit("pty_exit", {"slot": slot}, to=room)
     _cleanup(sid)
 

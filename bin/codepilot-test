@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""Run this PR's tests on HF Jobs through gh-codepilot's fixed recipe.
+
+Usage: codepilot-test <pytest target...> [--local | --box JOB_ID] [--flavor t4-small] [--timeout 45m]
+                      [--pytest-args '-k foo'] [--image IMG] [--wait]
+Needs RELORE_REPO (owner/repo) and CODEPILOT_PR (number) in the environment;
+both are set inside gh-codepilot sessions.
+"""
+import argparse, json, os, subprocess, sys, time, urllib.request
+
+ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument("target", nargs="*", help="pytest paths / node ids")
+ap.add_argument("--env", action="store_true", help="show the local test env status for this PR and exit")
+ap.add_argument("--refresh", action="store_true", help="redo uv pip install -e .[testing] for this PR before running")
+ap.add_argument("--flavor", default="t4-small")
+ap.add_argument("--timeout", default="45m")
+ap.add_argument("--pytest-args", default="")
+ap.add_argument("--image", default="")
+ap.add_argument("--wait", action="store_true", help="follow logs until the job ends")
+ap.add_argument("--local", action="store_true", help="run on this machine in the PR worktree (per-repo venv), streaming output")
+ap.add_argument("--box", metavar="JOB_ID", help="run on a warm shell box over ssh (any running box; see Jobs tab)")
+ap.add_argument("--run-slow", action="store_true", help="set RUN_SLOW=1 (local only)")
+a = ap.parse_args()
+
+repo, number = os.environ.get("RELORE_REPO"), os.environ.get("CODEPILOT_PR")
+if not repo or not number:
+    sys.exit("codepilot-test: RELORE_REPO / CODEPILOT_PR not set (run inside a gh-codepilot PR session)")
+api = os.environ.get("CODEPILOT_API", "http://127.0.0.1:5050")
+if a.env:
+    with urllib.request.urlopen(f"{api}/api/tests/local?repo={repo}&number={number}&env=1", timeout=150) as r:
+        e = json.load(r)["env"]
+    print(f"worktree : {e['worktree']}  {'(missing: open the PR session once)' if not e['worktree_exists'] else ''}")
+    print(f"head     : {e['head'] or '?'}")
+    print(f"venv     : {e['venv']}  ready={e['env_ready']}  installed {e['deps_installed_at'] or 'never'}{'  (dependency files changed: next run reinstalls)' if e.get('deps_stale') else ''}")
+    if e.get("python"):
+        print(f"python   : {e['python']}   torch {e['torch']}")
+        print(f"imports  : {e['transformers_from']}")
+        print("uses PR code: YES (editable install of this worktree)" if e["uses_pr_code"] else "uses PR code: NO (editable install points elsewhere; run with --refresh)")
+    elif e.get("import_error"):
+        print("import error (PR may add a dependency; try --refresh):\n" + e["import_error"])
+    else:
+        print("env not built yet: first `codepilot-test --local <target>` runs uv pip install -e .[testing] for this checkout")
+    sys.exit(0)
+if not a.target:
+    ap.error("give a pytest target (or --env)")
+if a.local or a.box:
+    payload = {"repo": repo, "number": int(number), "target": " ".join(a.target), "pytest_args": a.pytest_args, "run_slow": a.run_slow, "id": a.box, "refresh": a.refresh}
+    req = urllib.request.Request(f"{api}/api/jobs/warm/run" if a.box else f"{api}/api/tests/local", data=json.dumps(payload).encode(),
+                                 headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            d = json.load(r)
+    except urllib.error.HTTPError as e:
+        try: d = json.load(e)
+        except Exception: d = {"error": f"HTTP {e.code}"}
+    if d.get("error"):
+        sys.exit(f"codepilot-test: {d['error']}")
+    rid, off = d["run"]["id"], 0
+    while True:
+        with urllib.request.urlopen(f"{api}/api/tests/local/log?id={rid}&offset={off}", timeout=30) as r:
+            l = json.load(r)
+        if l.get("text"):
+            sys.stdout.write(l["text"]); sys.stdout.flush(); off = l["offset"]
+        if l.get("status") != "running":
+            print(f"[local run {rid}: {l.get('status')}]")
+            sys.exit(0 if l.get("status") == "passed" else 1)
+        time.sleep(1)
+
+payload = {"repo": repo, "number": int(number), "target": " ".join(a.target), "flavor": a.flavor,
+           "timeout": a.timeout, "pytest_args": a.pytest_args, "image": a.image}
+req = urllib.request.Request(f"{api}/api/jobs/run-tests", data=json.dumps(payload).encode(),
+                             headers={"Content-Type": "application/json"}, method="POST")
+try:
+    with urllib.request.urlopen(req, timeout=120) as r:
+        d = json.load(r)
+except urllib.error.HTTPError as e:
+    try: d = json.load(e)
+    except Exception: d = {"error": f"HTTP {e.code}"}
+if d.get("error"):
+    sys.exit(f"codepilot-test: {d['error']}")
+print(f"submitted job {d['id']} on {d['flavor']} for {d['target']} (head {d.get('head','')[:10]})")
+print(f"logs: hf jobs logs -f {d['id']}")
+if a.wait and d.get("id"):
+    subprocess.call(["hf", "jobs", "logs", "-f", d["id"]])
+    st = subprocess.run(["hf", "jobs", "inspect", d["id"]], capture_output=True, text=True).stdout
+    print(st[-600:])

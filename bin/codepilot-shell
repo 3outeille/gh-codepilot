@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""Open an interactive shell on HF Jobs hardware with this PR checked out in /work.
+
+Usage: codepilot-shell [--flavor t4-small] [--timeout 2h] [--no-setup] [--attach JOB_ID]
+Submits a job running sshd behind a cloudflared quick tunnel, waits for the
+tunnel hostname in the job log, then execs `ssh root@<host>` (needs a local
+`cloudflared`, e.g. `brew install cloudflared`). Inside: `cd /work && pytest tests/...`.
+`--attach` reconnects to a box that is already running. The job keeps running
+after you disconnect: cancel it from the Jobs tab or `hf jobs cancel <id>`.
+"""
+import argparse, json, os, re, shutil, subprocess, sys, time, urllib.request
+
+ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument("--flavor", default="t4-small")
+ap.add_argument("--timeout", default="2h", help="job lifetime")
+ap.add_argument("--image", default="")
+ap.add_argument("--no-setup", action="store_true", help="skip pip install -e .[testing]")
+ap.add_argument("--attach", metavar="JOB_ID", help="reconnect to a running box")
+ap.add_argument("--key", default=os.path.expanduser("~/.ssh/id_ed25519"), help="private key; its .pub is sent to the box")
+a = ap.parse_args()
+
+if not shutil.which("cloudflared"):
+    sys.exit("codepilot-shell: cloudflared not found locally (brew install cloudflared). "
+             "Without it, use the browser terminal: Jobs tab -> open terminal.")
+pub = a.key + ".pub"
+if not os.path.exists(pub):
+    sys.exit(f"codepilot-shell: {pub} not found; pass --key")
+api = os.environ.get("CODEPILOT_API", "http://127.0.0.1:5050")
+
+job = a.attach
+if not job:
+    repo, number = os.environ.get("RELORE_REPO"), os.environ.get("CODEPILOT_PR")
+    if not repo or not number:
+        sys.exit("codepilot-shell: RELORE_REPO / CODEPILOT_PR not set (run inside a gh-codepilot PR session)")
+    payload = {"repo": repo, "number": int(number), "flavor": a.flavor, "timeout": a.timeout,
+               "image": a.image, "pubkey": open(pub).read().strip(), "setup_tests": not a.no_setup}
+    req = urllib.request.Request(f"{api}/api/jobs/shell", data=json.dumps(payload).encode(),
+                                 headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            d = json.load(r)
+    except urllib.error.HTTPError as e:
+        try: d = json.load(e)
+        except Exception: d = {"error": f"HTTP {e.code}"}
+    if d.get("error"):
+        sys.exit(f"codepilot-shell: {d['error']}")
+    job = d["id"]
+    print(f"box {job} starting on {d['flavor']} (head {d.get('head','')[:10]}) — scheduling usually takes 2-5 min")
+
+host = None
+t0 = time.time()
+while time.time() - t0 < 15 * 60:
+    log = subprocess.run(["hf", "jobs", "logs", job, "-n", "200"], capture_output=True, text=True).stdout
+    m = re.search(r"\[cf-ssh\].*?https://([a-z0-9-]+\.trycloudflare\.com)", log)
+    if m:
+        host = m.group(1)
+        break
+    st = subprocess.run(["hf", "jobs", "inspect", job, "--format", "json"], capture_output=True, text=True).stdout
+    stage = re.search(r'"stage":\s*"(\w+)"', st)
+    stage = stage.group(1) if stage else "?"
+    if stage in ("COMPLETED", "ERROR", "CANCELED"):
+        sys.exit(f"codepilot-shell: job ended ({stage}) before the tunnel came up; see hf jobs logs {job}")
+    print(f"  {stage.lower()}… ({int(time.time()-t0)}s)", end="\r", flush=True)
+    time.sleep(8)
+if not host:
+    sys.exit(f"codepilot-shell: tunnel never appeared; hf jobs logs {job}")
+
+web = re.search(r"\[cf-web\].*?(https://[a-z0-9-]+\.trycloudflare\.com)", log)
+pw = re.search(r"CODEPILOT_WEB_PASS=(\S+)", log)
+if web and pw:
+    print(f"browser terminal: {web.group(1)}  (user codepilot / pass {pw.group(1)})")
+print(f"\nconnecting to {host} (job {job}); /work is the PR checkout. Box stays up until you cancel it.")
+ssh = ["ssh", "-i", a.key, "-p", "2222", "-o", f"ProxyCommand=cloudflared access tcp --hostname {host}",
+       "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR",
+       "-o", "ServerAliveInterval=30", "-t", f"root@{host}", "cd /work 2>/dev/null; exec bash -l"]
+# sshd may need a few seconds after the tunnel is up
+for i in range(10):
+    rc = subprocess.call(ssh)
+    if rc != 255:
+        break
+    time.sleep(5)
+print(f"disconnected. reattach: codepilot-shell --attach {job}   cancel: hf jobs cancel {job}")

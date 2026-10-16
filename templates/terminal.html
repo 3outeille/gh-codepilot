@@ -17,7 +17,10 @@
     .topbar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid #21262d; background: #161b22; flex-shrink: 0; }
     .topbar a { color: #58a6ff; text-decoration: none; font-size: 13px; }
     .topbar a:hover { text-decoration: underline; }
-    .topbar .title { font-size: 13px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .topbar .title { font-size: 13px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e6edf3; text-decoration: none; }
+    .topbar .title:hover { color: #58a6ff; text-decoration: none; }
+    .topbar .title .ext { color: #8b949e; font-size: 11px; font-weight: 400; }
+    .topbar .title:hover .ext { color: #58a6ff; }
     .topbar .type-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: #238636; color: #fff; }
     .topbar .type-badge.issue { background: #a371f7; }
 
@@ -373,7 +376,7 @@
   <div class="topbar">
     <a href="/?tab={{ category }}">< Dashboard</a>
     <span class="type-badge {{ 'issue' if category == 'issue' else '' }}">{{ 'Issue' if category == 'issue' else 'PR' }}</span>
-    <span class="title">#{{ number }} {{ title }}</span>
+    <a class="title" href="https://github.com/{{ repo }}/{{ 'pull' if category == 'pr' else 'issues' }}/{{ number }}" target="_blank" rel="noopener" title="Open on GitHub">#{{ number }} {{ title }} <span class="ext">↗</span></a>
     <button class="toggle on" id="diff-toggle" onclick="toggleDiffPane()">Diff</button>
   </div>
 
@@ -400,7 +403,7 @@
           <div class="seg"><button class="on" id="tree-toggle" onclick="toggleTree()" title="File tree">☰ files</button></div>
           {% if category == 'pr' %}
           <div class="seg"><button class="on" id="cpanel-toggle" onclick="toggleCpanel()" title="Comments panel">💬 <span id="comments-count">…</span></button></div>
-          <div class="seg"><button id="claude-toggle" onclick="toggleClaudeReview()" title="Claude critiques every hunk inline">🤖 Claude review</button></div>
+          <div class="seg"><button id="claude-toggle" onclick="toggleClaudeReview()" title="AI review of every hunk, shown inline in the diff">Review</button></div>
           {% endif %}
         </div>
         <span class="spacer"></span>
@@ -747,7 +750,7 @@
       claudeBtn.classList.toggle('on', claudeOn);
       claudeBtn.disabled = claudeBusy;
       const n = claudeReview ? claudeReview.findings.length : null;
-      claudeBtn.innerHTML = claudeBusy ? '🤖 Reviewing… (1–5 min)' : `🤖 Claude review${claudeOn && n !== null ? ` <span class="n">${n}</span>` : ''}`;
+      claudeBtn.innerHTML = claudeBusy ? 'Reviewing… (1–5 min)' : `Review${claudeOn && n !== null ? ` <span class="n">${n}</span>` : ''}`;
     }
     async function toggleClaudeReview() {
       claudeOn = !claudeOn;
@@ -775,7 +778,7 @@
     const SEV_LABEL = { high: 'High', medium: 'Medium', low: 'Low', nit: 'Nit' };
     function claudeCard(f) {
       return `<div class="rc-thread cr-card sev-${f.severity}"><div class="rc-comment">
-        <div class="rc-head"><b>🤖 Claude</b><span class="cr-sev">${SEV_LABEL[f.severity] || f.severity}</span>${f.title ? `<span class="cr-title">${escapeHtml(f.title)}</span>` : ''}</div>
+        <div class="rc-head"><b>Review</b><span class="cr-sev">${SEV_LABEL[f.severity] || f.severity}</span>${f.title ? `<span class="cr-title">${escapeHtml(f.title)}</span>` : ''}</div>
         <div class="rc-body">${md(f.body)}</div></div></div>`;
     }
     function injectClaudeReview() {
@@ -823,8 +826,8 @@
         placed++;
       }
       banner.innerHTML = !r
-        ? `<div class="cr-sum">No Claude review for this commit yet.</div><button onclick="regenerateClaudeReview()">Run review</button>`
-        : `<div class="cr-sum">${r.error ? `<span class="panel-err" style="padding:0">${escapeHtml(r.error)}</span>` : `<b>Claude review</b> <code>${escapeHtml(r.sha || '')}</code> · ${placed} finding${placed === 1 ? '' : 's'} inline${dropped ? ` · ${dropped} without a file not shown` : ''}<div class="md">${md(r.summary)}</div>`}</div>
+        ? `<div class="cr-sum">No review for this commit yet.</div><button onclick="regenerateClaudeReview()">Run review</button>`
+        : `<div class="cr-sum">${r.error ? `<span class="panel-err" style="padding:0">${escapeHtml(r.error)}</span>` : `<b>Review</b> <code>${escapeHtml(r.sha || '')}</code> · ${placed} finding${placed === 1 ? '' : 's'} inline${dropped ? ` · ${dropped} without a file not shown` : ''}<div class="md">${md(r.summary)}</div>`}</div>
            <button class="sec" onclick="regenerateClaudeReview()" ${claudeBusy ? 'disabled' : ''}>${claudeBusy ? 'Reviewing…' : 'Regenerate'}</button>`;
       scroll.prepend(banner);
       // Side-by-side: size the blank row on the other side so the two tables stay aligned.
@@ -934,13 +937,14 @@ codepilot-shell [--flavor t4-small]                      start a warm box and ss
       const e = envInfo;
       const ok = e.env_ready && e.uses_pr_code;
       el.innerHTML = `
-        <span class="t-pill ${e.env_ready ? 'ok' : 'warn'}">${e.env_ready ? 'local env ready' : 'local env not built'}</span>
+        <span class="t-pill ${e.env_ready ? 'ok' : 'warn'}">${e.env_ready ? 'PR venv ready (editable install)' : 'PR venv not built'}</span>
+        ${e.deps_stale ? '<span class="t-pill warn" title="setup.py/pyproject changed since install; next run reinstalls">deps changed, will reinstall</span>' : ''}
         ${e.env_ready ? `<span class="t-pill ${e.uses_pr_code ? 'ok' : 'bad'}" title="${escapeHtml(e.transformers_from || '')}">${e.uses_pr_code ? 'imports this PR’s code' : 'NOT importing PR code'}</span>` : ''}
         ${e.python ? `<span class="t-muted">py ${escapeHtml(e.python)} · torch ${escapeHtml(e.torch)} · deps ${escapeHtml(e.deps_installed_at || '?')}</span>` : ''}
         ${e.import_error ? `<span class="t-bad" title="${escapeHtml(e.import_error)}">import error — PR may add a dependency</span>` : ''}
-        ${!e.env_ready ? '<span class="t-muted">first local run builds it (a few minutes), after that runs take seconds</span>' : ''}
+        ${!e.env_ready ? '<span class="t-muted">first local run does <code>uv pip install -e .[testing]</code> for this checkout (about a minute with a warm uv cache)</span>' : ''}
         <span class="t-grow"></span>
-        <a href="#" onclick="refreshDeps();return false" title="rebuild venv deps (PR adds a dependency)">refresh deps</a>
+        <a href="#" onclick="refreshDeps();return false" title="redo uv pip install -e .[testing] for this PR">reinstall</a>
         <a href="#" onclick="refreshEnv();return false">re-check</a>`;
     }
 
