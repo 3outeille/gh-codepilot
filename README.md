@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/hraju115/gh-codepilot/main/install.
 This will:
 - Clone the repo to `~/.gh-codepilot`
 - Create a Python venv and install dependencies
-- Set up a cron job for polling (every 10 minutes)
+- Schedule the GitHub poll (a LaunchAgent on macOS, cron on Linux)
 - Start a background service (systemd on Linux, launchd on macOS)
 
 Then edit `~/.gh-codepilot/repos.conf` to add your repos and visit **http://127.0.0.1:5050**.
@@ -63,6 +63,18 @@ python app.py
 
 Open `http://127.0.0.1:5050` in Chrome/Edge and click the install icon in the address bar.
 
+### Why the poll is a LaunchAgent on macOS
+
+`gh` keeps its OAuth token in the macOS keyring, and cron jobs run outside your
+login session, where that keyring is unreachable. A cron-scheduled poll
+therefore fails every tick with `could not resolve GitHub user`, and the board
+only updates when something calls `/api/sync` by hand — so it silently goes
+stale overnight and looks fine the moment you touch it. The installer uses a
+`com.gh-codepilot.sync` LaunchAgent instead, which runs in your session.
+
+To check it: `launchctl list | grep codepilot` (second column is the last exit
+code, `0` is good), and `sync.log` should stay empty.
+
 ### Uninstall
 
 ```bash
@@ -72,7 +84,7 @@ curl -fsSL https://raw.githubusercontent.com/hraju115/gh-codepilot/main/uninstal
 ## Architecture
 
 ```
-check_notifications.py (cron, every 10min)
+check_notifications.py (scheduled poll)
   ├─ gh pr/issue list     → open_items.json (all open PRs/issues)
   ├─ /repos/{repo}/events → events.jsonl (activity log)
   └─ notify-send          → desktop notifications

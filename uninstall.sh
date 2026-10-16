@@ -26,6 +26,9 @@ if [[ "$OS" == "Linux" ]]; then
 elif [[ "$OS" == "Darwin" ]]; then
     PLIST="$HOME/Library/LaunchAgents/com.gh-codepilot.plist"
     launchctl unload "$PLIST" 2>/dev/null || true
+    SYNC_PLIST="$HOME/Library/LaunchAgents/com.gh-codepilot.sync.plist"
+    launchctl unload "$SYNC_PLIST" 2>/dev/null || true
+    rm -f "$SYNC_PLIST"
     rm -f "$PLIST"
     info "Removed launchd service"
 fi

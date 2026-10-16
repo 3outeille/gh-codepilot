@@ -8,6 +8,7 @@ muted.json
 .notif_state.json
 .state.json
 cron.log
+sync.log
 
 # Config with actual repo names
 repos.conf

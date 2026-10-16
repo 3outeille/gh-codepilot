@@ -85,22 +85,63 @@ if [[ ! -f "$INSTALL_DIR/repos.conf" ]]; then
     warn "Created repos.conf from example. Edit $INSTALL_DIR/repos.conf to add your repos."
 fi
 
-# ── Cron job ─────────────────────────────────────────────────────────────────
+# ── Sync schedule ────────────────────────────────────────────────────────────
+# On macOS this must be a LaunchAgent, not cron. cron runs outside the login
+# session, so `gh` cannot read its OAuth token out of the keyring and every
+# tick dies with "could not resolve GitHub user" — the board then only updates
+# when something hits /api/sync by hand.
 
-CRON_CMD="$VENV_PYTHON $INSTALL_DIR/check_notifications.py >> $INSTALL_DIR/cron.log 2>&1"
-
-if [[ "$OS" == "Linux" ]]; then
-    CRON_CMD="DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus $CRON_CMD"
-fi
-
-CRON_LINE="*/$POLL_INTERVAL * * * * $CRON_CMD"
-
-# Add cron job if not already present
-if ! crontab -l 2>/dev/null | grep -qF "check_notifications.py"; then
-    (crontab -l 2>/dev/null; echo "$CRON_LINE") | crontab -
-    info "Added cron job (every ${POLL_INTERVAL}min)"
+if [[ "$OS" == "Darwin" ]]; then
+    PLIST_DIR="$HOME/Library/LaunchAgents"
+    SYNC_PLIST="$PLIST_DIR/com.gh-codepilot.sync.plist"
+    mkdir -p "$PLIST_DIR"
+    cat > "$SYNC_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.gh-codepilot.sync</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$VENV_PYTHON</string>
+        <string>$INSTALL_DIR/check_notifications.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>$INSTALL_DIR</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>$VENV_DIR/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin</string>
+    </dict>
+    <key>StartInterval</key>
+    <integer>$((POLL_INTERVAL * 60))</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$INSTALL_DIR/sync.log</string>
+    <key>StandardErrorPath</key>
+    <string>$INSTALL_DIR/sync.log</string>
+</dict>
+</plist>
+EOF
+    launchctl unload "$SYNC_PLIST" 2>/dev/null || true
+    launchctl load "$SYNC_PLIST"
+    # Older installs scheduled this with cron, where it silently failed.
+    if crontab -l 2>/dev/null | grep -qF "check_notifications.py"; then
+        crontab -l 2>/dev/null | grep -v "check_notifications.py" | crontab -
+        info "Removed the old cron entry (cron cannot reach the keychain)"
+    fi
+    info "Installed sync LaunchAgent (every ${POLL_INTERVAL}min)"
 else
-    info "Cron job already exists, skipping"
+    CRON_CMD="DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus $VENV_PYTHON $INSTALL_DIR/check_notifications.py >> $INSTALL_DIR/cron.log 2>&1"
+    CRON_LINE="*/$POLL_INTERVAL * * * * $CRON_CMD"
+    if ! crontab -l 2>/dev/null | grep -qF "check_notifications.py"; then
+        (crontab -l 2>/dev/null; echo "$CRON_LINE") | crontab -
+        info "Added cron job (every ${POLL_INTERVAL}min)"
+    else
+        info "Cron job already exists, skipping"
+    fi
 fi
 
 # ── Background service ───────────────────────────────────────────────────────
