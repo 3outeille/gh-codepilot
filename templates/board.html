@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0d1117">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="icon" type="image/png" href="/static/icon-192.png">
-  <title>Board</title>
+  <title>Board{% if needs_you %} ({{ needs_you }}){% endif %}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #e6edf3; padding: 12px 16px; }
@@ -18,7 +18,15 @@
     .btn { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 3px 10px; font-size: 11px; cursor: pointer; }
     .btn:hover { background: #30363d; }
 
-    .board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: start; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 10px; border-bottom: 1px solid #21262d; }
+    .tabs button { background: none; border: none; border-bottom: 2px solid transparent; color: #8b949e; font-size: 13px; font-weight: 600; padding: 6px 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .tabs button:hover { color: #e6edf3; }
+    .tabs button.on { color: #e6edf3; border-bottom-color: #f78166; }
+    .tabs button .count { font-size: 11px; background: #21262d; color: #c9d1d9; padding: 0 7px; border-radius: 10px; }
+    .tabs button.on .count { background: #30363d; }
+    .tabs .right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    .board { display: none; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); gap: 10px; align-items: start; }
+    .board.on { display: grid; }
     @media (max-width: 1100px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 640px)  { .board { grid-template-columns: 1fr; } }
 
@@ -29,10 +37,11 @@
     .column-body { padding: 6px; display: flex; flex-direction: column; gap: 5px; }
     .column-empty { color: #484f58; font-size: 13px; text-align: center; padding: 18px 0; }
 
-    .col-your_move { --accent: #f78166; }
-    .col-waiting   { --accent: #d29922; }
-    .col-ready     { --accent: #3fb950; }
-    .col-drafts    { --accent: #8b949e; }
+    .col-fix, .col-to_review { --accent: #f78166; }
+    .col-waiting, .col-waiting_author { --accent: #d29922; }
+    .col-ready, .col-approved { --accent: #3fb950; }
+    .col-drafts { --accent: #8b949e; }
+    .col-mention { --accent: #58a6ff; }
 
     .card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; }
     .card.stale { border-color: #9e6a03; }
@@ -114,21 +123,18 @@
     <div class="meta">
       <span>updated <time id="updated" datetime="{{ server_time }}"></time></span>
       <a href="/list">list view</a>
-      <button class="btn" onclick="markAllSeen()" title="Clear every mention from Your move">Mark all mentions seen</button>
     </div>
   </header>
 
-  {% set titles = {
-    'your_move': 'Your move',
-    'waiting':   'Waiting on others',
-    'ready':     'Ready to merge',
-    'drafts':    'Drafts'
-  } %}
   {% set empties = {
-    'your_move': 'Nothing needs you',
-    'waiting':   'Nothing out for review',
-    'ready':     'Nothing approved yet',
-    'drafts':    'No drafts'
+    'fix':            'Nothing needs you',
+    'waiting':        'Nothing out for review',
+    'ready':          'Nothing approved yet',
+    'drafts':         'No drafts',
+    'to_review':      'No reviews waiting on you',
+    'waiting_author': 'No authors to wait on',
+    'approved':       'Nothing you approved is still open',
+    'mention':        'No new mentions'
   } %}
 
   {% macro card(item) %}
@@ -144,12 +150,12 @@
       {{ item.reason }}
       {% if item.stale %}<span class="stale-flag" title="No activity for 5+ days">⚠ stale</span>{% endif %}
     </div>
-    {% if item.category == 'pr' and (item.lines_changed or item.relation == 'review_requested') %}
+    {% if item.category == 'pr' and (item.lines_changed or item.relation in ('review_requested', 'reviewed')) %}
     <div class="facts">
       {% if item.lines_changed %}
       <span class="fact {{ 'big' if item.lines_changed >= 500 }}">{{ item.lines_changed }} lines · {{ item.changed_files }} files</span>
       {% endif %}
-      {% if item.relation == 'review_requested' %}
+      {% if item.relation in ('review_requested', 'reviewed') %}
         {% if item.approval_count >= 2 %}
         <span class="fact formality">{{ item.approval_count }} approvals already</span>
         {% elif item.reviewer_count == 0 %}
@@ -175,41 +181,25 @@
   </article>
   {% endmacro %}
 
-  <div class="board">
-    <section class="column col-your_move">
-      <div class="column-head">
-        <h2>Your move</h2>
-        <span class="sort-toggle" style="margin-left:auto;margin-right:8px">
-          <a class="{{ 'on' if sort == 'recent' }}" href="?sort=recent">recent</a> ·
-          <a class="{{ 'on' if sort == 'oldest' }}" href="?sort=oldest">oldest</a>
-        </span>
-        <span class="count">{{ your_move_count }}</span>
-      </div>
-      <div class="column-body" style="gap:0">
-        {% if your_move_count == 0 %}
-        <div class="column-empty">Nothing needs you</div>
-        {% endif %}
-        {% for key, title, items in sections %}
-        <div class="section" data-section="{{ key }}">
-          <div class="section-head" onclick="toggleSection(this)">
-            <span class="chev">▾</span>
-            <h3>{{ title }}</h3>
-            <span class="count">{{ items|length }}</span>
-          </div>
-          <div class="section-body">
-            {% if not items %}<div class="section-empty">—</div>{% endif %}
-            {% for item in items %}{{ card(item) }}{% endfor %}
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-    </section>
+  <div class="tabs" id="tabs">
+    {% for v in views %}
+    <button data-view="{{ v.key }}" onclick="setView('{{ v.key }}')">{{ v.title }}<span class="count">{{ v.count }}</span></button>
+    {% endfor %}
+    <span class="right">
+      <span class="sort-toggle">
+        <a class="{{ 'on' if sort == 'recent' }}" href="?sort=recent">recent</a> ·
+        <a class="{{ 'on' if sort == 'oldest' }}" href="?sort=oldest">oldest</a>
+      </span>
+      <button class="btn" id="mark-all" onclick="markAllSeen()" title="Clear every mention" style="display:none">Mark all mentions seen</button>
+    </span>
+  </div>
 
-    {% for col in ['waiting', 'ready', 'drafts'] %}
-    {% set items = columns[col] %}
+  {% for v in views %}
+  <div class="board" data-view="{{ v.key }}" style="--cols: {{ v.columns|length }}">
+    {% for col, title, items in v.columns %}
     <section class="column col-{{ col }}">
       <div class="column-head">
-        <h2>{{ titles[col] }}</h2>
+        <h2>{{ title }}</h2>
         <span class="count">{{ items|length }}</span>
       </div>
       <div class="column-body">
@@ -221,6 +211,7 @@
     </section>
     {% endfor %}
   </div>
+  {% endfor %}
 
   <aside id="drawer" class="collapsed">
     <div class="drawer-head" onclick="toggleDrawer()">
@@ -324,6 +315,21 @@
       }
     }
 
+    // ── Views: My PRs / Reviewing / Mentions ──
+    function setView(v, push) {
+      if (!document.querySelector(`.board[data-view="${v}"]`)) v = 'mine';
+      document.querySelectorAll('#tabs button[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+      document.querySelectorAll('.board').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+      document.getElementById('mark-all').style.display = v === 'mentions' ? '' : 'none';
+      try { localStorage.setItem('board.view', v); } catch (e) {}
+      if (push !== false) { const u = new URL(location); u.searchParams.set('view', v); history.replaceState(null, '', u); }
+    }
+    (function () {
+      let v = '{{ active_view }}';
+      if (!v) { try { v = localStorage.getItem('board.view') || ''; } catch (e) {} }
+      setView(v || 'mine', false);
+    })();
+
     // Collapse state survives reloads (per-viewer convenience only).
     const COLLAPSE_KEY = 'board.collapsed';
     function loadCollapsed() {
@@ -369,7 +375,7 @@
     function restoreAll() { restoreKeys([...drawer.querySelectorAll('.drawer-item')].map(d => d.dataset.key)); }
 
     // Refresh when the poller writes new data.
-    setInterval(() => location.reload(), 5 * 60 * 1000);
+    setInterval(() => location.reload(), 5 * 60 * 1000);   // ?view= is kept, so the tab survives
   </script>
 </body>
 </html>

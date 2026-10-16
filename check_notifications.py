@@ -146,7 +146,7 @@ _GH_USER = None
 
 # Relation precedence: an item you authored outranks a review request,
 # which outranks a plain mention.
-_RELATION_RANK = {"mine": 3, "review_requested": 2, "mentioned": 1}
+_RELATION_RANK = {"mine": 4, "review_requested": 3, "reviewed": 2, "mentioned": 1}
 
 # isDraft exists on `gh search prs` only; passing it to `gh search issues`
 # makes the whole query fail.
@@ -183,9 +183,14 @@ def _enrich_pr(repo, number):
     def is_human(login):
         return login and not login.endswith("[bot]") and login not in ("github-actions", "HuggingFaceDocBuilderDev")
 
+    me = gh_user()
+    my_state = next((r.get("state") for r in latest if (r.get("author") or {}).get("login") == me), "")
+    my_at = ""
     reviewer_at, author_at, reviewers = "", "", set()
     for r in data.get("reviews") or []:
         who, at = (r.get("author") or {}).get("login", ""), r.get("submittedAt") or ""
+        if who == me:
+            my_at = max(my_at, at)
         if who == author:
             author_at = max(author_at, at)
         elif is_human(who):
@@ -224,6 +229,9 @@ def _enrich_pr(repo, number):
         "reviewed_by": sorted(reviewers),
         "last_reviewer_at": reviewer_at,
         "last_author_at": author_at,
+        # Your own latest review (APPROVED / CHANGES_REQUESTED / COMMENTED) and when.
+        "my_review_state": my_state,
+        "my_review_at": my_at,
     }
 
 
@@ -302,6 +310,7 @@ def sync_open_items(repos):
 
     prs, prs_ok = _collect("prs", [
         ("mentions", "mentioned"),
+        ("reviewed-by", "reviewed"),            # you reviewed it: waiting on the author, or you approved
         ("review-requested", "review_requested"),
         ("author", "mine"),
     ], repos)
