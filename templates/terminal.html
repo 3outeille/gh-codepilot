@@ -61,40 +61,184 @@
     .topbar .toggle { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
     .topbar .toggle.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
     .workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
-    /* Tests tab */
-    .tests { padding: 10px 10px 20px; }
-    .t-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px; position: relative; }
-    .t-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; } .t-row:last-child { margin-bottom: 0; }
-    .t-row input, .t-row select, .t-start select { background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 5px 8px; font-size: 11.5px; font-family: Menlo, Consolas, monospace; }
-    .t-row input:focus { outline: none; border-color: #58a6ff; }
-    #t-target { flex: 1; min-width: 260px; }
-    .t-lbl { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: .04em; }
-    .t-grow { flex: 1; }
-    .t-where button { padding: 4px 10px; }
-    .t-only-box, .t-only-job { display: none; } .t-card.w-box .t-only-box, .t-card.w-job .t-only-job { display: inline-block; }
-    .t-primary { background: #238636; color: #fff; border: 1px solid #2ea043; border-radius: 6px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
-    .t-primary:hover { background: #2ea043; } .t-primary:disabled { opacity: .5; cursor: default; }
-    .t-primary.arm, button.arm { background: #9e6a03; border-color: #d29922; color: #fff; }
-    .t-env { font-size: 11px; color: #8b949e; border-top: 1px solid #21262d; padding-top: 8px; margin-top: 2px; }
-    .t-env a { color: #58a6ff; text-decoration: none; margin-left: 10px; }
-    .t-pill { padding: 1px 8px; border-radius: 10px; font-size: 10.5px; border: 1px solid; }
-    .t-pill.ok { color: #3fb950; border-color: #238636; background: #12261e; } .t-pill.warn { color: #d29922; border-color: #9e6a03; background: #2a2109; } .t-pill.bad { color: #f85149; border-color: #da3633; background: #2d1215; }
-    .t-muted { color: #8b949e; font-size: 11px; } .t-bad { color: #f85149; font-size: 11px; }
-    #t-flash { position: absolute; right: 12px; top: -11px; font-size: 11px; padding: 2px 10px; border-radius: 10px; border: 1px solid; background: #161b22; }
-    #t-flash.ok { color: #3fb950; border-color: #238636; } #t-flash.bad { color: #f85149; border-color: #da3633; }
-    .t-cheat { margin: 10px 0 4px; border: 1px dashed #30363d; border-radius: 8px; }
-    .t-cheat-head { display: flex; gap: 10px; align-items: center; padding: 6px 12px; font-size: 11.5px; color: #e6edf3; cursor: pointer; } .t-cheat-head .t-caret { margin-left: auto; color: #8b949e; }
-    .t-cheat.closed .t-cheat-body { display: none; } .t-cheat.closed .t-caret { transform: rotate(-90deg); }
-    .t-cheat-body { margin: 0; padding: 4px 12px 10px; font-family: Menlo, Consolas, monospace; font-size: 11px; color: #c9d1d9; line-height: 1.6; white-space: pre; overflow-x: auto; }
-    .tests h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #8b949e; margin: 16px 2px 6px; display: flex; align-items: baseline; gap: 8px; }
-    .t-count { background: #30363d; color: #c9d1d9; font-size: 10px; padding: 0 6px; border-radius: 8px; }
+    /* ── Tests & Benchmarks tab ──────────────────────────────────────────────
+       Master–detail: a rail of runs on the left, one run filling the right.
+       Benchmarks are the reason this is a two-pane layout — you read a chart
+       while clicking between runs, and the differences surface themselves. */
+    #tests-body.on, #bench-body.on { display: flex; overflow: hidden; }
+    .t-rail { width: 216px; flex-shrink: 0; border-right: 1px solid #21262d; overflow-y: auto; background: #0d1117; padding-bottom: 20px; }
+    .t-detail { flex: 1; min-width: 0; overflow-y: auto; }
+    .t-detail.stale { opacity: .55; }          /* refetch holds the render, never a skeleton flash */
+
+    .t-rail h5 { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #6e7681; margin: 12px 10px 4px; display: flex; align-items: center; gap: 6px; }
+    .t-rail h5 .n { background: #21262d; color: #8b949e; border-radius: 8px; padding: 0 5px; font-size: 9.5px; letter-spacing: 0; }
+    .t-rail h5 button { margin-left: auto; background: none; border: none; color: #58a6ff; font-size: 10px; cursor: pointer; padding: 0; letter-spacing: 0; text-transform: none; }
+    .t-new { display: block; width: calc(100% - 16px); margin: 8px; background: #238636; color: #fff; border: none; border-radius: 6px; padding: 6px; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+    .t-new:hover { background: #2ea043; }
+    .t-new.alt { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; font-weight: 500; }
+    .t-new.alt:hover { background: #30363d; }
+
+    .t-item { display: grid; grid-template-columns: 8px 1fr; gap: 7px; align-items: start; padding: 5px 10px; cursor: pointer; border-left: 2px solid transparent; }
+    .t-item:hover { background: #161b22; }
+    .t-item.on { background: #161b22; border-left-color: #f78166; }
+    .t-item .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; background: #484f58; }
+    .t-item.pass .dot { background: #3fb950; } .t-item.fail .dot { background: #f85149; }
+    .t-item.run .dot { background: #d29922; animation: tpulse 1.6s ease-in-out infinite; }
+    @keyframes tpulse { 50% { opacity: .35; } }
+    .t-item .ttl { font-size: 11.5px; color: #c9d1d9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .t-item.on .ttl { color: #e6edf3; }
+    .t-item .sub { font-size: 10px; color: #6e7681; display: flex; gap: 5px; align-items: center; margin-top: 1px; overflow: hidden; white-space: nowrap; }
+    .t-rail .t-empty { font-size: 10.5px; color: #484f58; padding: 2px 12px 6px; }
+
+    /* The recipe chip is the reproducibility handle: same chip = same experiment. */
+    .t-chip { font-family: Menlo, Consolas, monospace; font-size: 9.5px; background: #1c2333; color: #79c0ff; border: 1px solid #1f3b5c; border-radius: 3px; padding: 0 4px; flex-shrink: 0; }
+
+    /* Detail header */
+    .t-head { padding: 12px 16px 0; }
+    .t-head h3 { font-size: 15px; font-weight: 600; color: #e6edf3; display: flex; align-items: center; gap: 9px; margin-bottom: 3px; }
+    .t-head h3 .t-stage { font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 10px; border: 1px solid; }
+    .t-stage.ok { color: #3fb950; border-color: #238636; background: #0f2419; }
+    .t-stage.bad { color: #f85149; border-color: #da3633; background: #2d1215; }
+    .t-stage.run { color: #d29922; border-color: #9e6a03; background: #2a2109; }
+    .t-stage.idle { color: #8b949e; border-color: #30363d; }
+    .t-sub { font-size: 11.5px; color: #8b949e; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    /* Reproducibility claims: each one is a checkable fact, not a reassurance. */
+    .t-repro { display: flex; flex-wrap: wrap; gap: 6px; margin: 9px 0 0; }
+    .t-claim { display: flex; align-items: center; gap: 5px; font-size: 10.5px; padding: 2px 8px; border-radius: 10px; border: 1px solid #30363d; background: #161b22; color: #8b949e; }
+    .t-claim b { color: #c9d1d9; font-weight: 600; }
+    .t-claim .t-mono { color: #79c0ff; }
+    .t-claim.ok { border-color: #238636; background: #0f2419; } .t-claim.ok::before { content: "✓"; color: #3fb950; }
+    .t-claim.warn { border-color: #9e6a03; background: #2a2109; } .t-claim.warn::before { content: "!"; color: #d29922; font-weight: 700; }
+    .t-claim.link { cursor: pointer; } .t-claim.link:hover { border-color: #58a6ff; }
+
+    .t-acts { display: flex; gap: 6px; margin: 10px 0 0; flex-wrap: wrap; }
+    .t-acts button, .t-acts a { font-size: 11px; padding: 4px 11px; border-radius: 6px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; cursor: pointer; text-decoration: none; }
+    .t-acts button:hover, .t-acts a:hover { background: #30363d; }
+    .t-acts button.go { background: #238636; border-color: #2ea043; color: #fff; font-weight: 600; }
+    .t-acts button.go:hover { background: #2ea043; }
+    .t-acts button:disabled { opacity: .5; cursor: default; }
+
+    .t-tabs { display: flex; gap: 2px; margin: 12px 16px 0; border-bottom: 1px solid #21262d; }
+    .t-tabs button { background: none; border: none; border-bottom: 2px solid transparent; color: #8b949e; font-size: 11.5px; padding: 5px 10px; cursor: pointer; margin-bottom: -1px; }
+    .t-tabs button:hover { color: #e6edf3; }
+    .t-tabs button.on { color: #e6edf3; border-bottom-color: #f78166; }
+    .t-tabs .n { font-size: 9.5px; color: #6e7681; margin-left: 4px; }
+    .t-pane { padding: 12px 16px 24px; }
+
+    /* ── Charts ────────────────────────────────────────────────────────────
+       Hand-drawn SVG rather than a chart library: the marks follow one spec
+       (hairline grid, 2px lines, ringed markers, muted label ink) and the
+       dark surface is the one these colors were validated against. */
+        /* The figure scales with its column, and so does every label inside the
+       viewBox — so the column is capped. Past about 540px the tick and
+       direct-label text starts shouting over the data. */
+    .t-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; justify-content: start; }
+    .t-fig { max-width: 544px; }
+    .t-fig { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 10px 12px 6px; min-width: 0; }
+    .t-fig h6 { font-size: 11px; color: #c9d1d9; font-weight: 600; margin-bottom: 1px; }
+    .t-fig .cap { font-size: 10px; color: #6e7681; margin-bottom: 4px; }
+    .t-fig svg { display: block; width: 100%; overflow: visible; }
+    .t-grid-line { stroke: #21262d; stroke-width: 1; shape-rendering: crispEdges; }
+    .t-axis { stroke: #30363d; stroke-width: 1; shape-rendering: crispEdges; }
+    .t-tick { font-size: 9px; fill: #6e7681; font-variant-numeric: tabular-nums; }
+    .t-alab { font-size: 9.5px; fill: #8b949e; }
+    .t-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+    .t-mark { stroke: #161b22; stroke-width: 1.5; }
+    .t-dlab { font-size: 9.5px; fill: #8b949e; }
+    .t-cross { stroke: #58a6ff; stroke-width: 1; stroke-opacity: .5; shape-rendering: crispEdges; }
+    .t-hit { fill: transparent; cursor: crosshair; }
+
+    /* One legend above the whole small-multiple group: identity is learned once. */
+    .t-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 10px; }
+    .t-legend label { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #8b949e; cursor: pointer; user-select: none; }
+    .t-legend label.off { color: #484f58; } .t-legend label.off .sw { opacity: .25; }
+    .t-legend .sw { width: 22px; height: 10px; flex-shrink: 0; overflow: visible; }
+    .t-legend input { display: none; }
+
+    .t-ctrl { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 10px; font-size: 11px; color: #8b949e; }
+    .t-ctrl select, .t-ctrl input { background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 5px; padding: 3px 6px; font-size: 11px; }
+    .t-ctrl .seg button { background: #0d1117; color: #8b949e; border: none; padding: 3px 9px; font-size: 10.5px; cursor: pointer; }
+    .t-ctrl .seg button.on { background: #21262d; color: #e6edf3; }
+
+    .t-tip { position: fixed; z-index: 60; pointer-events: none; background: #1c2128; border: 1px solid #30363d; border-radius: 6px; padding: 6px 9px; font-size: 10.5px; color: #c9d1d9; box-shadow: 0 6px 20px rgba(0,0,0,.5); max-width: 280px; }
+    .t-tip .hd { color: #e6edf3; font-weight: 600; margin-bottom: 3px; }
+    .t-tip .rw { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+    .t-tip .rw .sw { width: 10px; height: 10px; flex-shrink: 0; overflow: visible; }
+    .t-tip .rw .v { margin-left: auto; color: #e6edf3; }
+
+    /* Table view — every chart's WCAG-clean twin. */
+    .t-table-wrap { overflow: auto; max-height: 420px; border: 1px solid #21262d; border-radius: 6px; }
+    table.t-table { border-collapse: collapse; font-size: 10.5px; width: 100%; font-variant-numeric: tabular-nums; }
+    .t-table th { position: sticky; top: 0; background: #1c2128; color: #8b949e; font-weight: 600; text-align: left; padding: 4px 8px; border-bottom: 1px solid #30363d; white-space: nowrap; }
+    .t-table td { padding: 3px 8px; border-bottom: 1px solid #161b22; color: #c9d1d9; white-space: nowrap; }
+    .t-table tr:hover td { background: #161b22; }
+    .t-table td.dim { color: #8b949e; }
+
+    /* Plots: uploaded images sit beside the charts drawn from the log. */
+    .t-gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+    .t-gal figure { background: #161b22; border: 1px solid #21262d; border-radius: 8px; overflow: hidden; }
+    .t-gal img { display: block; width: 100%; background: #fff; cursor: zoom-in; }
+    .t-gal figcaption { font-size: 10px; color: #8b949e; padding: 5px 8px; display: flex; gap: 6px; align-items: center; }
+    .t-gal figcaption a { color: #58a6ff; text-decoration: none; margin-left: auto; }
+    .t-lightbox { position: fixed; inset: 0; z-index: 80; background: rgba(1,4,9,.88); display: flex; align-items: center; justify-content: center; cursor: zoom-out; padding: 24px; }
+    .t-lightbox img { max-width: 100%; max-height: 100%; background: #fff; border-radius: 4px; }
+
+    /* Setup: the submitted file, verbatim. */
+    .t-kv { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; font-size: 11.5px; margin-bottom: 14px; }
+    .t-kv dt { color: #6e7681; } .t-kv dd { color: #c9d1d9; font-family: Menlo, Consolas, monospace; font-size: 11px; word-break: break-all; }
+    .t-kv dd.warn { color: #d29922; } .t-kv dd.ok { color: #3fb950; }
+    .t-code { background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 9px 11px; font-family: Menlo, Consolas, monospace; font-size: 10.5px; line-height: 1.5; color: #c9d1d9; overflow: auto; max-height: 460px; white-space: pre; }
+    .t-copy { float: right; font-size: 10px; padding: 1px 8px; border-radius: 4px; border: 1px solid #30363d; background: #21262d; color: #8b949e; cursor: pointer; }
+    .t-copy:hover { color: #e6edf3; }
+    .t-pkgs { columns: 3; column-gap: 18px; font-family: Menlo, Consolas, monospace; font-size: 10px; color: #8b949e; max-height: 220px; overflow: auto; background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 8px 11px; }
+
+    /* Submit form */
+    .t-form { max-width: 760px; }
+    .t-field { margin-bottom: 11px; }
+    .t-field label { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: #6e7681; margin-bottom: 3px; }
+    .t-field .hint { font-size: 10.5px; color: #6e7681; text-transform: none; letter-spacing: 0; margin-left: 6px; }
+    .t-field input, .t-field select, .t-field textarea { width: 100%; background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 5px 8px; font-size: 11.5px; font-family: Menlo, Consolas, monospace; }
+    .t-field input:focus, .t-field textarea:focus { outline: none; border-color: #58a6ff; }
+    .t-field textarea { min-height: 220px; line-height: 1.5; resize: vertical; white-space: pre; }
+    .t-cols { display: flex; gap: 10px; flex-wrap: wrap; } .t-cols .t-field { flex: 1; min-width: 130px; }
+
+    /* Design review: the script's own claims, then evidence from its source.
+       Two blocks that must never be mistaken for each other, so the claim side
+       is quiet and the evidence side carries the marks and the count. */
+    .t-block { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 10px 14px 12px; margin-bottom: 12px; }
+    .t-block.bad { border-color: #da3633; }
+    .t-block > header { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-bottom: 8px; }
+    .t-block > header h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #c9d1d9; }
+    .t-block > header .t-muted { font-size: 10.5px; }
+    .t-pillcount { font-size: 10.5px; padding: 1px 8px; border-radius: 10px; border: 1px solid; }
+    .t-pillcount.ok { color: #3fb950; border-color: #238636; background: #0f2419; }
+    .t-pillcount.warn { color: #d29922; border-color: #9e6a03; background: #2a2109; }
+
+    dl.t-plan { display: grid; grid-template-columns: max-content 1fr; gap: 5px 16px; font-size: 12px; }
+    dl.t-plan dt { color: #6e7681; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding-top: 1px; }
+    dl.t-plan dd { color: #c9d1d9; line-height: 1.5; }
+    dl.t-plan dd b { color: #8b949e; font-weight: 600; font-family: Menlo, Consolas, monospace; font-size: 11px; }
+
+    ul.t-checks { list-style: none; display: grid; gap: 2px; }
+    ul.t-checks li { display: grid; grid-template-columns: 14px max-content 1fr; gap: 8px; align-items: baseline; font-size: 11.5px; padding: 2px 0; }
+    ul.t-checks .mk { font-weight: 700; text-align: center; }
+    ul.t-checks li.ok .mk { color: #3fb950; } ul.t-checks li.warn .mk { color: #d29922; } ul.t-checks li.na .mk { color: #484f58; }
+    ul.t-checks .lb { color: #c9d1d9; } ul.t-checks li.na .lb { color: #6e7681; }
+    ul.t-checks .dt { color: #6e7681; font-size: 11px; }
+    .t-sweeps { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 9px; padding-top: 8px; border-top: 1px solid #21262d; }
+
+    /* Shared small type used across both panes. */
+    .t-pane h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #8b949e; display: flex; align-items: baseline; gap: 8px; }
+    .t-count { background: #30363d; color: #c9d1d9; font-size: 10px; padding: 0 6px; border-radius: 8px; letter-spacing: 0; }
     .t-h4note { text-transform: none; letter-spacing: 0; font-weight: normal; }
-    .t-status { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: #e6edf3; width: 64px; flex-shrink: 0; }
-    .t-where-tag { font-size: 10.5px; color: #8b949e; background: #21262d; padding: 0 6px; border-radius: 4px; flex-shrink: 0; }
+    .t-muted { color: #8b949e; font-size: 11px; } .t-bad { color: #f85149; font-size: 11px; }
     .t-mono { font-family: Menlo, Consolas, monospace; }
-    .t-empty { color: #484f58; font-size: 12px; padding: 12px 8px; } .t-empty code { color: #8b949e; }
-    .t-start { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 8px; border: 1px dashed #30363d; border-radius: 4px; margin-top: 4px; }
-    .t-start button { font-size: 10.5px; padding: 2px 9px; border-radius: 4px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; cursor: pointer; }
+    .t-detail .t-empty { color: #6e7681; font-size: 12px; padding: 10px 0; max-width: 620px; }
+    .t-detail .t-empty code { color: #8b949e; background: #161b22; border: 1px solid #21262d; border-radius: 3px; padding: 0 3px; font-size: 10.5px; }
+    .t-flash { position: sticky; top: 0; z-index: 20; margin: 8px 16px -4px; font-size: 11px; padding: 4px 11px; border-radius: 6px; border: 1px solid; background: #161b22; }
+    .t-flash.ok { color: #3fb950; border-color: #238636; } .t-flash.bad { color: #f85149; border-color: #da3633; }
+
     .chk-log .ok { color: #3fb950; }
     .splitter { height: 5px; cursor: row-resize; background: #21262d; flex-shrink: 0; }
     .splitter:hover, .splitter.dragging { background: #58a6ff; }
@@ -388,7 +532,8 @@
           <button class="on" data-view="diff" onclick="setView('diff')">Diff</button>
           {% if category == 'pr' %}
           <button data-view="checks" onclick="setView('checks')">Checks<span class="n" id="checks-n"></span></button>
-          <button data-view="jobs" onclick="setView('jobs')">Tests<span class="n" id="jobs-n"></span></button>
+          <button data-view="tests" onclick="setView('tests')">Tests<span class="n" id="tests-n"></span></button>
+          <button data-view="bench" onclick="setView('bench')">Bench<span class="n" id="bench-n"></span></button>
           {% endif %}
         </div>
         <div class="diff-only">
@@ -423,7 +568,8 @@
         </aside>
       </div>
       <div class="panel" id="checks-body"></div>
-      <div class="panel" id="jobs-body"></div>
+      <div class="panel" id="tests-body"></div>
+      <div class="panel" id="bench-body"></div>
     </aside>
     <div class="splitter" id="splitter"></div>
     <div class="terminal-area">
@@ -630,8 +776,8 @@
 
     // ── Views ──
     let view = 'diff';
-    const loaded = { checks: false, jobs: false };
-    const loaders = { checks: () => loadChecks(), jobs: () => loadJobs() };
+    const loaded = { checks: false, tests: false, bench: false };
+    const loaders = { checks: () => loadChecks(), tests: () => loadTests(), bench: () => loadBench() };
     function setView(v) {
       view = v;
       diffPane.dataset.view = v;
@@ -837,285 +983,1078 @@
     paintClaudeBtn();
     if (claudeOn) ensureClaudeReview(false).then(() => { if (lastDiffText !== null) renderDiff(lastDiffText); });
 
-    // ── Tests tab ──────────────────────────────────────────────────────────
-    // Form state lives in T (persisted per PR); lists re-render independently
-    // of the form so typing is never clobbered by a refresh.
+    // ── Tests and Bench ────────────────────────────────────────────────────
+    // Two independent panes with the same shape: a rail of runs on the left,
+    // one run filling the right. Tests are pass/fail and cheap; benchmarks are
+    // numbers whose worth depends entirely on being able to say what produced
+    // them. They share almost no controls, so they no longer share a tab.
+    //
+    // Everything here is cache-first. A finished run cannot change, so moving
+    // between its tabs must not cost a network round trip — `hf jobs ps` alone
+    // is a second or more, and paying it per click is what made this crawl.
     const T_KEY = `tests.${REPO}#${NUMBER}`;
-    const T = Object.assign({ target: '', args: '', where: 'local', box: '', flavor: 't4-small', timeout: '45m', cheat: true },
-      (() => { try { return JSON.parse(localStorage.getItem(T_KEY) || '{}'); } catch (e) { return {}; } })());
+    const T = Object.assign({
+      target: '', args: '', where: 'local', box: '', flavor: 't4-small', timeout: '45m',
+      bPath: '', bSrc: '', bName: '', bFlavor: 'a10g-small', bTimeout: '45m',
+      bDeps: '', bEnv: '', bRepo: '', selTest: '', selBench: '', tab: 'setup', specs: {},
+    }, (() => { try { return JSON.parse(localStorage.getItem(T_KEY) || '{}'); } catch (e) { return {}; } })());
     const saveT = () => { try { localStorage.setItem(T_KEY, JSON.stringify(T)); } catch (e) {} };
-    const FLAVORS = ['cpu-basic','cpu-upgrade','t4-small','t4-medium','l4x1','a10g-small','a10g-large','a10g-largex2','a100-large','h200'];
+
+    const FLAVORS = ['cpu-basic','cpu-upgrade','t4-small','t4-medium','l4x1','l40sx1','a10g-small','a10g-large','a10g-largex2','a100-large','h200','h200x2','h200x4','h200x8'];
     const SMALL = new Set(['cpu-basic','cpu-upgrade','t4-small','t4-medium','l4x1','a10g-small']);
-    const PRICE = { 'cpu-basic': 'free-ish', 't4-small': '$0.40/h', 'a10g-small': '$1/h', 'a10g-largex2': '$3/h', 'a100-large': '$2.50/h', 'h200': '$5/h' };
-    let boxes = [], envInfo = null;
-    const runLogs = {};   // run id -> {offset, text, open}
-    const running = /RUNNING|PENDING|STARTING|SCHEDULING/i;
+    const PRICE = { 'cpu-basic': 'free-ish', 't4-small': '$0.40/h', 'a10g-small': '$1/h', 'a10g-largex2': '$3/h', 'a100-large': '$2.50/h', 'h200': '$5/h', 'h200x8': '$40/h' };
+    const RUNNING = /RUNNING|PENDING|STARTING|SCHEDULING|UPDATING/i;
+    const BENCH_TABS = ['setup', 'plots', 'metrics', 'log'];
 
-    async function loadJobs() {
-      const el = document.getElementById('jobs-body');
-      if (!document.getElementById('t-form')) {
+    let boxes = [], benchRuns = [], testRuns = [], benchMeta = {}, envInfo = null;
+    const runLogs = {};        // local/box run id -> {offset, text}
+    const detailCache = {};    // bench job id -> last /api/bench/detail payload
+
+    const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo: REPO, number: NUMBER, ...body }) }).then(r => r.json()).catch(() => ({ error: 'request failed' }));
+
+    const liveCount = () => benchRuns.filter(r => RUNNING.test(r.stage)).length
+                          + testRuns.filter(r => r.status === 'running').length;
+    const stageClass = s => /COMPLETED|passed/i.test(s) ? 'pass' : /ERROR|FAILED|failed/i.test(s) ? 'fail'
+                          : RUNNING.test(s) || s === 'running' ? 'run' : '';
+
+    function flash(text, bad) {
+      const host = document.querySelector('.panel.on .t-detail');
+      if (!host) return;
+      let el = host.querySelector('.t-flash');
+      if (!el) { el = document.createElement('div'); el.className = 't-flash'; host.prepend(el); }
+      el.classList.toggle('bad', !!bad); el.classList.toggle('ok', !bad); el.textContent = text;
+      clearTimeout(el._t); el._t = setTimeout(() => el.remove(), bad ? 10000 : 4500);
+    }
+
+    // Selection repaints the highlight in place. Re-rendering the rail would
+    // mean refetching it, which is exactly the cost we are trying to avoid.
+    function markSelected(railId, key) {
+      document.querySelectorAll(`#${railId} .t-item`).forEach(el =>
+        el.classList.toggle('on', el.dataset.key === key));
+    }
+
+    // ── Tests pane ─────────────────────────────────────────────────────────
+    async function loadTests() {
+      const el = document.getElementById('tests-body');
+      if (!document.getElementById('tests-rail')) {
+        el.innerHTML = `<aside class="t-rail" id="tests-rail"></aside><section class="t-detail" id="tests-detail"></section>`;
+        if (!T.selTest) T.selTest = 'new-test';
         if (!T.target) T.target = guessTestTarget();
-        el.innerHTML = `<div class="tests">
-          <section class="t-card" id="t-form">${renderForm()}</section>
-          <section class="t-cheat ${T.cheat ? '' : 'closed'}" id="t-cheat">${renderCheat()}</section>
-          <section id="t-runs"></section>
-          <section id="t-boxes"></section>
-          <section id="t-jobs"></section>
-        </div>`;
-        bindForm();
-        refreshEnv();
       }
-      await Promise.all([renderRuns(), renderBoxes(), renderJobs()]);
+      document.getElementById('tests-rail').innerHTML = '<div class="t-empty" style="padding:14px 12px">Loading…</div>';
+      renderTestsDetail();
+      await renderTestsRail();
+      if (!document.activeElement?.closest?.('.t-form')) renderTestsDetail();
     }
 
-    function renderForm() {
-      return `
-        <div class="t-row">
-          <input id="t-target" placeholder="tests/path/test_x.py[::Class::test]   (space-separated targets ok)" value="${escapeHtml(T.target)}" spellcheck="false">
-          <input id="t-args" placeholder="pytest args, e.g. -k name -x" value="${escapeHtml(T.args)}" spellcheck="false" style="width:170px">
-        </div>
-        <div class="t-row">
-          <span class="t-lbl">run</span>
-          <div class="seg t-where">
-            <button data-w="local" title="pytest in the PR worktree on this Mac — seconds">Local</button>
-            <button data-w="box" title="on a running GPU box over ssh — seconds">Warm box</button>
-            <button data-w="job" title="fresh HF Job: schedule + image + install — minutes">HF Job</button>
+    async function renderTestsRail() {
+      const host = document.getElementById('tests-rail'); if (!host) return;
+      const [t, w] = await Promise.all([
+        api('/api/tests/local').catch(() => ({ error: 'request failed' })),
+        fetch('/api/jobs/warm').then(r => r.json()).catch(() => ({ error: 'request failed' })),
+      ]);
+      testRuns = t.runs || []; boxes = w.boxes || [];
+      benchMeta.sshReady = !!w.ssh_ready;
+      const n = document.getElementById('tests-n');
+      if (n) n.textContent = testRuns.filter(r => r.status === 'running').length || '';
+      const dur = r => r.ended ? Math.round(r.ended - r.started) + 's'
+                     : r.started ? timeAgo(new Date(r.started * 1000).toISOString()) + ' ago' : '';
+      host.innerHTML = `
+        <button class="t-new" onclick="selectTest('new-test')">+ Run tests</button>
+        <h5>Runs <span class="n">${testRuns.length}</span></h5>
+        ${testRuns.map(r => `
+          <div class="t-item ${stageClass(r.status)} ${T.selTest === 'test:' + r.id ? 'on' : ''}"
+               data-key="test:${r.id}" onclick="selectTest('test:${r.id}')">
+            <span class="dot"></span>
+            <div><div class="ttl">${escapeHtml((r.target || '').split(' ')[0].split('/').pop() || r.target)}</div>
+              <div class="sub">${r.box ? 'box ' + escapeHtml(r.box.slice(-6)) : 'local'} · ${dur(r)}</div></div>
+          </div>`).join('') || `<div class="t-empty">No runs yet. Local runs happen in this PR's own worktree and take seconds.</div>`}
+        <h5>Boxes <span class="n">${boxes.length}</span><button onclick="selectTest('new-box')">start</button></h5>
+        ${boxes.map(bx => `
+          <div class="t-item run ${T.selTest === 'box:' + bx.id ? 'on' : ''}"
+               data-key="box:${bx.id}" onclick="selectTest('box:${bx.id}')">
+            <span class="dot"></span>
+            <div><div class="ttl">${escapeHtml(bx.flavor)}</div>
+              <div class="sub"><span class="t-chip">${bx.id.slice(-6)}</span>up ${timeAgo(bx.created_at)}</div></div>
+          </div>`).join('') || `<div class="t-empty">No warm box running.</div>`}
+        ${t.error || w.error ? `<div class="t-empty" style="color:#f85149">${escapeHtml(t.error || w.error)}</div>` : ''}`;
+    }
+
+    function selectTest(key) {
+      T.selTest = key; saveT();
+      markSelected('tests-rail', key);
+      renderTestsDetail();
+    }
+
+    function renderTestsDetail() {
+      const host = document.getElementById('tests-detail'); if (!host) return;
+      const [kind, id] = T.selTest.split(':');
+      if (kind === 'new-test') return renderTestForm(host);
+      if (kind === 'new-box') return renderBoxForm(host);
+      if (kind === 'test') return renderTestRun(host, id);
+      if (kind === 'box') return renderBox(host, id);
+      host.innerHTML = `<div class="t-pane"><div class="t-empty">Pick a run on the left.</div></div>`;
+    }
+
+    // ── Bench pane ─────────────────────────────────────────────────────────
+    async function loadBench() {
+      const el = document.getElementById('bench-body');
+      if (!document.getElementById('bench-rail')) {
+        el.innerHTML = `<aside class="t-rail" id="bench-rail"></aside><section class="t-detail" id="bench-detail"></section>`;
+        if (!T.selBench) T.selBench = 'new-bench';
+      }
+      document.getElementById('bench-rail').innerHTML = '<div class="t-empty" style="padding:14px 12px">Loading…</div>';
+      renderBenchDetail();
+      await renderBenchRail();
+      if (!document.activeElement?.closest?.('.t-form')) renderBenchDetail();
+    }
+
+    async function renderBenchRail() {
+      const host = document.getElementById('bench-rail'); if (!host) return;
+      const b = await api('/api/bench').catch(() => ({ error: 'request failed' }));
+      benchRuns = b.runs || [];
+      benchMeta = { ...benchMeta, pr_head: b.pr_head || '', flavors: b.flavors || FLAVORS,
+                    defaultRepo: b.default_artifacts_repo || '' };
+      if (!T.bRepo && benchMeta.defaultRepo) { T.bRepo = benchMeta.defaultRepo; saveT(); }
+      const n = document.getElementById('bench-n');
+      if (n) n.textContent = benchRuns.filter(r => RUNNING.test(r.stage)).length || '';
+      host.innerHTML = `
+        <button class="t-new" onclick="selectBench('new-bench')">+ New benchmark</button>
+        <h5>Runs <span class="n">${benchRuns.length}</span></h5>
+        ${benchRuns.map(r => `
+          <div class="t-item ${stageClass(r.stage)} ${T.selBench === 'bench:' + r.id ? 'on' : ''}"
+               data-key="bench:${r.id}" onclick="selectBench('bench:${r.id}')">
+            <span class="dot"></span>
+            <div><div class="ttl">${escapeHtml(r.name)}</div>
+              <div class="sub"><span class="t-chip">${r.recipe}</span>${escapeHtml(r.flavor)}
+                ${r.siblings > 1 ? `<span title="runs sharing this recipe">×${r.siblings}</span>` : ''}
+                ${r.created_at ? '· ' + timeAgo(r.created_at) : ''}</div></div>
+          </div>`).join('') || `<div class="t-empty">None yet — a benchmark here keeps its script, deps, hardware and commit so it can be re-run exactly.</div>`}
+        ${b.error ? `<div class="t-empty" style="color:#f85149">${escapeHtml(b.error)}</div>` : ''}`;
+    }
+
+    function selectBench(key) {
+      T.selBench = key;
+      if (key.startsWith('bench:') && !BENCH_TABS.includes(T.tab)) T.tab = 'setup';
+      saveT();
+      markSelected('bench-rail', key);
+      renderBenchDetail();
+    }
+    function setTab(t) { T.tab = t; saveT(); renderBenchDetail(); }
+
+    function renderBenchDetail() {
+      const host = document.getElementById('bench-detail'); if (!host) return;
+      const [kind, id] = T.selBench.split(':');
+      if (kind === 'new-bench') return renderBenchForm(host);
+      if (kind === 'bench') return renderBenchRun(host, id);
+      host.innerHTML = `<div class="t-pane"><div class="t-empty">Pick a run on the left.</div></div>`;
+    }
+
+    // ── One benchmark run ──────────────────────────────────────────────────
+    let detailSeq = 0;
+
+    async function renderBenchRun(host, id, fresh) {
+      const cached = detailCache[id];
+      if (cached) paintBenchRun(host, cached, id);
+      // A tab switch on a run we already hold is pure rendering. Only a first
+      // open, an explicit refresh or a live run goes back to the server.
+      if (cached && !fresh) return;
+      if (!cached) host.innerHTML = `<div class="t-pane"><div class="t-empty">Loading run…</div></div>`;
+      else host.classList.add('stale');
+      const seq = ++detailSeq;
+      const d = await api('/api/bench/detail', `&id=${id}`).catch(() => ({ error: 'request failed' }));
+      if (seq !== detailSeq) return;
+      host.classList.remove('stale');
+      if (T.selBench !== 'bench:' + id) return;
+      if (d.error) { host.innerHTML = `<div class="t-pane"><div class="panel-err">${escapeHtml(d.error)}</div></div>`; return; }
+      detailCache[id] = d;
+      paintBenchRun(host, d, id);
+      clearTimeout(renderBenchRun._t);
+      if (d.run.running) renderBenchRun._t = setTimeout(() => {
+        if (T.selBench === 'bench:' + id) renderBenchRun(document.getElementById('bench-detail'), id, true);
+      }, 6000);
+    }
+
+    function paintBenchRun(host, d, id) {
+      const r = d.run, stage = r.stage || '';
+      const st = /COMPLETED/i.test(stage) ? 'ok' : /ERROR|FAILED/i.test(stage) ? 'bad'
+               : RUNNING.test(stage) ? 'run' : 'idle';
+      const nPlots = (d.datasets || []).length + (d.artifacts?.files || []).filter(f => f.image).length;
+      host.innerHTML = `
+        <div class="t-head">
+          <h3>${escapeHtml(r.name)} <span class="t-stage ${st}">${escapeHtml(stage.toLowerCase() || 'unknown')}</span></h3>
+          <div class="t-sub">
+            <span>${escapeHtml(r.flavor)}${PRICE[r.flavor] ? ' · ' + PRICE[r.flavor] : ''}</span>
+            ${r.created_at ? `<span>· started ${timeAgo(r.created_at)} ago</span>` : ''}
+            ${r.message ? `<span>· ${escapeHtml(r.message)}</span>` : ''}
           </div>
-          <select id="t-box" class="t-only-box" title="which box"></select>
-          <select id="t-flavor" class="t-only-job">${FLAVORS.map(f => `<option value="${f}" ${f === T.flavor ? 'selected' : ''}>${f}${PRICE[f] ? ' · ' + PRICE[f] : ''}</option>`).join('')}</select>
-          <input id="t-timeout" class="t-only-job" value="${escapeHtml(T.timeout)}" title="max duration" style="width:48px">
-          <span class="t-grow"></span>
-          <button id="t-run" class="t-primary">▶ Run</button>
+          ${reproClaims(d)}
+          <div class="t-acts">
+            <button class="go" onclick="rerun(this,'${id}')" title="Submit this exact recipe again">⟳ Re-run exactly</button>
+            ${r.running ? `<button onclick="cancelJob(this,'${id}')">Cancel</button>` : ''}
+            <button onclick="forkBench('${id}')" title="Load this script into the form to change something">Edit &amp; run variant</button>
+            <button onclick="refreshBench('${id}')" title="Re-read status and log from the Hub">↻</button>
+            ${r.url ? `<a href="${r.url}" target="_blank" rel="noopener">Job on the Hub ↗</a>` : ''}
+            ${d.artifacts?.hub_url && d.artifacts?.uploaded ? `<a href="${d.artifacts.hub_url}" target="_blank" rel="noopener">Results dataset ↗</a>` : ''}
+          </div>
         </div>
-        <div class="t-row t-env" id="t-env"><span class="t-muted">checking local env…</span></div>`;
+        <div class="t-tabs">
+          <button class="${T.tab === 'setup' ? 'on' : ''}" onclick="setTab('setup')">Setup</button>
+          <button class="${T.tab === 'plots' ? 'on' : ''}" onclick="setTab('plots')">Plots<span class="n">${nPlots || ''}</span></button>
+          <button class="${T.tab === 'metrics' ? 'on' : ''}" onclick="setTab('metrics')">Metrics<span class="n">${(d.datasets || []).length || ''}</span></button>
+          <button class="${T.tab === 'log' ? 'on' : ''}" onclick="setTab('log')">Log</button>
+        </div>
+        <div class="t-pane" id="t-pane"></div>`;
+      const pane = document.getElementById('t-pane');
+      if (T.tab === 'plots') renderPlots(pane, d, id);
+      else if (T.tab === 'metrics') renderMetrics(pane, d);
+      else if (T.tab === 'log') renderLog(pane, d);
+      else renderSetup(pane, d);
     }
 
-    function renderCheat() {
-      return `<div class="t-cheat-head" onclick="T.cheat=!T.cheat;saveT();document.getElementById('t-cheat').classList.toggle('closed')">
-          <span>In the Claude session</span><span class="t-muted">type these — Claude runs them and summarizes failures</span><span class="t-caret">▾</span></div>
-        <pre class="t-cheat-body">/test tests/tensor_parallel/test_tensor_parallel.py      local, seconds (default)
-/test tests/models/llama -k generation                   extra pytest args pass through
-/test tests/x.py --box &lt;job id&gt;                           on a warm GPU box (ids listed under Boxes)
-/test tests/x.py --job --flavor a10g-small               one-shot HF Job (minutes of startup)
-/test --env                                              is the env ready, does it import this PR's code
-codepilot-shell [--flavor t4-small]                      start a warm box and ssh into it</pre>`;
+    function refreshBench(id) {
+      delete detailCache[id];
+      renderBenchRun(document.getElementById('bench-detail'), id, true);
+      renderBenchRail();
     }
 
-    function bindForm() {
-      const $ = id => document.getElementById(id);
+    // Each claim is a fact the reader can check, not a reassurance.
+    function reproClaims(d) {
+      const r = d.run, m = d.meta || {}, a = d.artifacts || {};
+      const sib = (r.siblings || []).length;
+      const pkgs = Object.keys(m.packages || {}).length;
+      const gpu = m.gpu || {};
+      const c = [];
+      c.push(`<span class="t-claim ok" title="Hash of script + dependencies + hardware + commit + env. Same chip, same experiment.">recipe <b class="t-mono">${r.recipe}</b></span>`);
+      c.push(sib > 1
+        ? `<span class="t-claim ok" title="Other runs submitted from this identical recipe">ran <b>${sib}×</b> identically</span>`
+        : `<span class="t-claim" title="Re-run it to confirm the numbers repeat">ran <b>once</b></span>`);
+      c.push(r.commit
+        ? (r.at_pr_head
+            ? `<span class="t-claim ok" title="${escapeHtml(r.commit)}">commit <b class="t-mono">${r.commit.slice(0, 7)}</b> = PR head</span>`
+            : `<span class="t-claim warn" title="PR head is now ${escapeHtml(r.pr_head || 'unknown')} — this ran against older code">commit <b class="t-mono">${r.commit.slice(0, 7)}</b> behind PR head</span>`)
+        : `<span class="t-claim warn">no commit pinned</span>`);
+      if (pkgs) c.push(`<span class="t-claim ok link" title="Exact versions resolved inside the job" onclick="setTab('setup')"><b>${pkgs}</b> package versions recorded</span>`);
+      if (gpu.device) c.push(`<span class="t-claim ok">${escapeHtml(gpu.device)}${gpu.count > 1 ? ' ×' + gpu.count : ''}${gpu.torch ? ' · torch ' + escapeHtml(gpu.torch) : ''}</span>`);
+      else if (m.python) c.push(`<span class="t-claim">python ${escapeHtml(m.python)}</span>`);
+      const live = ((d.audit || {}).checks || []).filter(x => x.status !== 'na');
+      const pass = live.filter(x => x.status === 'ok').length;
+      if (live.length) c.push(`<span class="t-claim ${pass === live.length ? 'ok' : 'warn'} link" title="Methodology checks read out of the script's source" onclick="setTab('setup')"><b>${pass}/${live.length}</b> design checks</span>`);
+      if (d.plan) c.push(`<span class="t-claim link" onclick="setTab('setup')">plan declared</span>`);
+      const nf = (a.files || []).length;
+      if (a.uploaded) c.push(`<span class="t-claim ok link" onclick="setTab('plots')"><b>${nf}</b> file${nf === 1 ? '' : 's'} uploaded</span>`);
+      else if (a.error) c.push(`<span class="t-claim warn" title="${escapeHtml(a.error)}">upload failed</span>`);
+      return `<div class="t-repro">${c.join('')}</div>`;
+    }
+
+    async function rerun(btn, id) {
+      if (btn.dataset.armed !== '1') {
+        btn.dataset.armed = '1'; btn.textContent = 'confirm re-run';
+        setTimeout(() => { btn.dataset.armed = ''; btn.textContent = '⟳ Re-run exactly'; }, 6000); return;
+      }
+      btn.disabled = true; btn.textContent = '…';
+      const r = await post('/api/bench/rerun', { id });
+      btn.disabled = false; btn.dataset.armed = ''; btn.textContent = '⟳ Re-run exactly';
+      if (r.error) return flash(r.error, true);
+      flash(r.same_recipe ? `re-submitted as ${r.id} — same recipe ${r.recipe}`
+                          : `submitted ${r.id}, but the recipe changed to ${r.recipe}`, !r.same_recipe);
+      await renderBenchRail();
+    }
+
+    function forkBench(id) {
+      const d = detailCache[id]; if (!d) return flash('still loading that run', true);
+      const r = d.run;
+      T.bSrc = d.setup?.script || ''; T.bPath = ''; T.bName = r.name || 'bench.py';
+      T.bFlavor = r.flavor || T.bFlavor; T.bDeps = (r.deps || []).join(' ');
+      T.bEnv = Object.entries(r.env || {}).map(([k, v]) => `${k}=${v}`).join(' ');
+      saveT(); selectBench('new-bench');
+    }
+
+    // ── Setup: the plan, the audit, and the file that was submitted ────────
+    // Merged deliberately. "How was this run defined" is one question, and
+    // splitting the claim, the evidence and the artefact across two tabs made
+    // you click between halves of the same answer.
+    function renderSetup(pane, d) {
+      const r = d.run, m = d.meta || {}, s = d.setup || {};
+      const cmd = (s.command || []).map(a => /[\s"']/.test(a) ? `'${a}'` : a).join(' ');
+      const pkgs = m.packages || {};
+      pane.innerHTML =
+        declaredHTML(d.plan, d.plan_source) + auditHTML(d.audit) + whereHTML(r, m) + `
+        <h4 style="margin:2px 2px 6px">Submitted command</h4>
+        ${copyBtn('cmd', cmd)}
+        <div class="t-code" style="margin-bottom:16px">${escapeHtml(cmd)}</div>
+
+        <h4 style="margin:2px 2px 6px">Benchmark script
+          <span class="t-muted t-h4note">stored at submit time — this is what ran, not what the file says now</span></h4>
+        ${copyBtn('script', s.script || '')}
+        <div class="t-code" style="margin-bottom:16px">${escapeHtml(s.script || '')}</div>
+
+        ${Object.keys(pkgs).length ? `<h4 style="margin:2px 2px 6px">Resolved packages <span class="t-count">${Object.keys(pkgs).length}</span>
+          <span class="t-muted t-h4note">as installed inside the job</span></h4>
+          <div class="t-pkgs">${Object.keys(pkgs).sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1)
+            .map(k => `${escapeHtml(k)}==${escapeHtml(pkgs[k])}`).join('<br>')}</div>` : ''}
+
+        <details style="margin-top:16px"><summary style="cursor:pointer;font-size:11.5px;color:#8b949e">Generated wrapper (prelude that records the environment and collects $BENCH_OUT)</summary>
+          <div class="t-code" style="margin-top:8px">${escapeHtml(s.wrapper || '')}</div></details>`;
+    }
+
+    const copyBuf = {};
+    function copyBtn(key, text, label) {
+      copyBuf[key] = text || '';
+      return `<button class="t-copy" onclick="copyText(this,'${key}')">${label || 'copy'}</button>`;
+    }
+    function copyText(btn, key) {
+      navigator.clipboard.writeText(copyBuf[key] ?? '').then(
+        () => { const t = btn.textContent; btn.textContent = 'copied'; setTimeout(() => btn.textContent = t, 1500); },
+        () => { btn.textContent = 'copy failed'; });
+    }
+
+    // ── Plots: charts drawn from the run's own JSON, then its uploaded images ──
+    function renderPlots(pane, d, id) {
+      const imgs = (d.artifacts?.files || []).filter(f => f.image);
+      const sets = d.datasets || [];
+      if (!sets.length && !imgs.length) {
+        pane.innerHTML = `<div class="t-empty" style="padding:24px 0">
+          <p style="margin-bottom:10px">No plots from this run yet.</p>
+          <p style="font-size:11.5px;line-height:1.7">Two ways to get them, neither needs a change to how you launch:</p>
+          <ul style="font-size:11.5px;line-height:1.8;padding-left:20px;margin-top:6px">
+            <li>print a JSON table between <code>JSON_BEGIN</code> and <code>JSON_END</code> — charted here, and it stays in the job log next to the setup that produced it;</li>
+            <li>save images normally (<code>plt.savefig("speedup.png")</code>) — the run writes into <code>$BENCH_OUT</code>, which is collected and uploaded.</li>
+          </ul>
+          ${(d.json_errors || []).length ? `<p style="color:#d29922;margin-top:10px">A JSON block was printed but could not be parsed: ${escapeHtml(d.json_errors[0])}</p>` : ''}
+          ${d.run.running ? '<p style="margin-top:10px;color:#d29922">The run is still going.</p>' : ''}
+        </div>`;
+        return;
+      }
+      pane.innerHTML =
+        (Object.keys(d.facts || {}).length ? `<div class="t-ctrl" style="margin-bottom:12px">${
+          Object.entries(d.facts).map(([k, v]) => `<span class="t-claim">${escapeHtml(k)} <b>${escapeHtml(String(v))}</b></span>`).join('')}</div>` : '') +
+        sets.map((s, i) => `<section id="ds-${i}" style="margin-bottom:22px"></section>`).join('') +
+        (imgs.length ? `<h4 style="margin:4px 2px 8px">Uploaded images <span class="t-count">${imgs.length}</span></h4>
+          <div class="t-gal">${imgs.map(f => `
+            <figure><img src="${f.src}" alt="${escapeHtml(f.name)}" loading="lazy" onclick="lightbox(this.src)">
+              <figcaption>${escapeHtml(f.name)}<a href="${f.src}" target="_blank" rel="noopener">open ↗</a></figcaption></figure>`).join('')}</div>` : '');
+      sets.forEach((s, i) => renderDataset(document.getElementById(`ds-${i}`), s, `${id}:${i}`));
+    }
+
+    function lightbox(src) {
+      const el = document.createElement('div');
+      el.className = 't-lightbox'; el.innerHTML = `<img src="${src}">`;
+      el.onclick = () => el.remove();
+      document.body.appendChild(el);
+    }
+
+    function renderMetrics(pane, d) {
+      const sets = d.datasets || [];
+      if (!sets.length) { pane.innerHTML = `<div class="t-empty">This run printed no JSON table.</div>`; return; }
+      pane.innerHTML = sets.map((s, i) => `
+        <h4 style="margin:2px 2px 6px">${escapeHtml(s.name)} <span class="t-count">${s.rows.length} rows</span>
+          <span class="t-muted t-h4note">read out of the job log</span></h4>
+        <div class="t-table-wrap" style="margin-bottom:18px">${tableHTML(s.rows)}</div>`).join('');
+    }
+
+    function renderLog(pane, d) {
+      const txt = d.log || '';
+      pane.innerHTML = `${d.log_error ? `<div class="panel-err">${escapeHtml(d.log_error)}</div>` : ''}
+        ${copyBtn('log', txt)}
+        <pre class="chk-log" style="max-height:none" id="t-logpre"></pre>`;
+      const pre = document.getElementById('t-logpre');
+      pre.innerHTML = escapeHtml(txt || '(no output yet)')
+        .replace(/^(Traceback.*|.*Error: .*|E\s{2,}.*|FAILED .*|.*Exception.*)$/gm, '<span class="hl">$1</span>')
+        .replace(/^(BENCH_META .*|BENCH_ARTIFACTS .*|BENCH_PLAN .*)$/gm, '<span style="color:#6e7681">$1</span>');
+      pre.scrollTop = pre.scrollHeight;
+    }
+
+    // ── Reviewing the design, not just the result ──────────────────────────
+    // The script is normally written by Claude, so the first question is "is
+    // this benchmark built correctly?" — asked before the GPU bill, not after.
+    // Two blocks, kept visually apart on purpose: what the script *claims*
+    // about itself, and what parsing its source actually *shows*. A plan is
+    // free to assert a warmup it never performs; only the second block can
+    // contradict it.
+    const PLAN_FIELDS = [
+      ['question', 'Question', 'what this run is meant to answer'],
+      ['arms', 'Compares', 'the implementations put side by side'],
+      ['sweeps', 'Sweeps', 'parameters varied, and over what range'],
+      ['metrics', 'Measures', 'quantities recorded, with units'],
+      ['method', 'Method', 'warmup, repetitions, timer, seed'],
+      ['expect', 'Expected shape', 'what the author predicts the plot looks like'],
+      ['notes', 'Notes', ''],
+    ];
+
+    const planValue = v => {
+      if (v === null || v === undefined) return '—';
+      if (Array.isArray(v)) return v.map(x => escapeHtml(fmtNum(x))).join(' · ');
+      if (typeof v === 'object') return Object.entries(v)
+        .map(([k, x]) => `<b>${escapeHtml(k)}</b> ${Array.isArray(x) ? x.slice(0, 8).map(y => escapeHtml(fmtNum(y))).join(', ') + (x.length > 8 ? ', …' : '') : escapeHtml(fmtNum(x))}`)
+        .join(' &nbsp;·&nbsp; ');
+      return escapeHtml(String(v));
+    };
+
+    function declaredHTML(plan, source) {
+      if (!plan) return `<section class="t-block">
+        <header><h4>What the benchmark says it does</h4><span class="t-muted">not declared</span></header>
+        <div class="t-empty" style="padding:8px 0">
+          This script declares no <code>BENCH_PLAN</code>, so there is nothing to check its code against.
+          Ask Claude to add one — a plain dict near the top:
+          <div class="t-code" style="margin-top:8px;white-space:pre">BENCH_PLAN = {
+    "question": "does the one-hot GEMM beat index_put for MoE gather?",
+    "arms":     ["main (index_put)", "PR (onehot GEMM)"],
+    "sweeps":   {"experts": [4, 8, 16, 32, 64, 128], "skew": [0.0, 0.3, 0.6]},
+    "metrics":  {"latency": "ms", "imbalance": "max/mean"},
+    "method":   {"warmup": 5, "reps": 20, "timer": "cuda.Event", "seed": 0},
+    "expect":   "PR flat in experts; main linear",
+}</div></div></section>`;
+      const known = new Set(PLAN_FIELDS.map(f => f[0]));
+      const extra = Object.keys(plan).filter(k => !known.has(k));
+      return `<section class="t-block">
+        <header><h4>What the benchmark says it does</h4>
+          <span class="t-muted">declared by the script${source === 'runtime' ? ', printed at run time' : ''} — a claim, not a check</span></header>
+        <dl class="t-plan">
+          ${PLAN_FIELDS.filter(([k]) => plan[k] !== undefined).map(([k, label, hint]) =>
+            `<dt title="${escapeHtml(hint)}">${label}</dt><dd>${planValue(plan[k])}</dd>`).join('')}
+          ${extra.map(k => `<dt>${escapeHtml(k)}</dt><dd>${planValue(plan[k])}</dd>`).join('')}
+        </dl></section>`;
+    }
+
+    function auditHTML(audit) {
+      if (!audit) return '';
+      if (audit.parse_error) return `<section class="t-block bad">
+        <header><h4>What reading the code shows</h4></header>
+        <div class="t-bad">This script does not parse: ${escapeHtml(audit.parse_error)}. It will fail as soon as it starts.</div></section>`;
+      const live = (audit.checks || []).filter(c => c.status !== 'na');
+      const ok = live.filter(c => c.status === 'ok').length;
+      const allGood = ok === live.length;
+      return `<section class="t-block">
+        <header><h4>What reading the code shows</h4>
+          <span class="t-pillcount ${allGood ? 'ok' : 'warn'}">${ok} of ${live.length} checks pass</span>
+          <span class="t-muted">read from the source — these are evidence</span></header>
+        <ul class="t-checks">
+          ${(audit.checks || []).map(c => `<li class="${c.status}">
+            <span class="mk">${c.status === 'ok' ? '✓' : c.status === 'na' ? '–' : '!'}</span>
+            <span class="lb">${escapeHtml(c.label)}</span>
+            <span class="dt">${escapeHtml(c.detail)}</span></li>`).join('')}
+        </ul>
+        ${(audit.sweeps || []).length ? `<div class="t-sweeps"><span class="t-muted">loops found in the code:</span>
+          ${audit.sweeps.map(s => `<span class="t-claim"><b>${escapeHtml(s.var)}</b> ${s.n} values ·
+            ${s.values.slice(0, 6).map(v => escapeHtml(fmtNum(v))).join(', ')}${s.n > 6 ? ', …' : ''}</span>`).join('')}</div>` : ''}
+      </section>`;
+    }
+
+    function whereHTML(run, meta) {
+      const m = meta || {}, g = m.gpu || {};
+      if (!run) return '';
+      const row = (k, v, cls) => `<dt>${k}</dt><dd class="${cls || ''}">${v}</dd>`;
+      return `<section class="t-block">
+        <header><h4>Where it runs</h4><span class="t-muted">${m.python ? 'recorded inside the job' : 'requested — the job has not reported yet'}</span></header>
+        <dl class="t-kv" style="margin:0">
+          ${row('hardware', escapeHtml(run.flavor || '—') + (PRICE[run.flavor] ? ' · ' + PRICE[run.flavor] : ''))}
+          ${row('commit', escapeHtml((run.commit || '—').slice(0, 12)) + (run.at_pr_head ? ' = PR head' : run.pr_head ? ' · PR head is now ' + run.pr_head.slice(0, 7) : ''), run.at_pr_head ? 'ok' : 'warn')}
+          ${g.device ? row('device', escapeHtml(g.device) + (g.count > 1 ? ' ×' + g.count : '') + (g.capability ? ' · sm' + escapeHtml(g.capability.replace('.', '')) : '')) : ''}
+          ${g.torch ? row('torch', escapeHtml(g.torch) + (g.cuda ? ' · cuda ' + escapeHtml(String(g.cuda)) : ' · cpu only'), g.cuda ? '' : 'warn') : ''}
+          ${m.python ? row('python', escapeHtml(m.python) + (m.platform ? ' · ' + escapeHtml(m.platform) : '')) : ''}
+          ${m.packages ? row('packages', Object.keys(m.packages).length + ' versions recorded') : ''}
+          ${row('results to', run.artifacts_repo ? escapeHtml(run.artifacts_repo) : 'not uploaded')}
+        </dl></section>`;
+    }
+
+    function renderPlan(pane, d) {
+      pane.innerHTML = declaredHTML(d.plan, d.plan_source) + auditHTML(d.audit) + whereHTML(d.run, d.meta);
+    }
+
+    // ── Charting a table we have never seen before ─────────────────────────
+    // A benchmark script prints whatever it likes, so the shape is inferred:
+    // a column that repeats across rows is a *dimension* (a knob that was
+    // swept), one that is near-unique per row is a *measure* (what was timed).
+    // X is the widest dimension, the rest become small multiples, and every
+    // choice is a control the reader can overrule.
+    //
+    // Colors are the eight-slot categorical palette, validated against this
+    // app's #161b22 surface (worst adjacent CVD ΔE 8.4, all ≥3:1 contrast).
+    // Slots are assigned from each measure's fixed position in the dataset,
+    // so hiding a series never repaints the others.
+    const SERIES = ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'];
+    // Past three series the palette no longer clears the all-pairs gates that
+    // overlapping marks need, so every series also carries a shape. Colour and
+    // shape agree in the chart, the legend and the tooltip.
+    const SHAPES = ['circle','square','triangle','diamond','triangleDown','cross','pentagon','ex'];
+    const chartHover = {};
+
+    function markPath(shape, x, y, r) {
+      const p = (pts) => `<polygon points="${pts.map(([a, b]) => `${(x + a * r).toFixed(1)},${(y + b * r).toFixed(1)}`).join(' ')}"`;
+      switch (shape) {
+        case 'square': return `<rect x="${(x - r * .88).toFixed(1)}" y="${(y - r * .88).toFixed(1)}" width="${(r * 1.76).toFixed(1)}" height="${(r * 1.76).toFixed(1)}"`;
+        case 'triangle': return p([[0, -1.15], [1, .72], [-1, .72]]);
+        case 'triangleDown': return p([[0, 1.15], [1, -.72], [-1, -.72]]);
+        case 'diamond': return p([[0, -1.3], [1.1, 0], [0, 1.3], [-1.1, 0]]);
+        case 'pentagon': return p([[0, -1.2], [1.14, -.37], [.71, 1], [-.71, 1], [-1.14, -.37]]);
+        case 'cross': return p([[-.38, -1.1], [.38, -1.1], [.38, -.38], [1.1, -.38], [1.1, .38], [.38, .38], [.38, 1.1], [-.38, 1.1], [-.38, .38], [-1.1, .38], [-1.1, -.38], [-.38, -.38]]);
+        case 'ex': return `<path d="M${(x - r).toFixed(1)},${(y - r).toFixed(1)}L${(x + r).toFixed(1)},${(y + r).toFixed(1)}M${(x + r).toFixed(1)},${(y - r).toFixed(1)}L${(x - r).toFixed(1)},${(y + r).toFixed(1)}" stroke-width="2.2"`;
+        default: return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}"`;
+      }
+    }
+    const shapeOfIdx = i => SHAPES[i % SHAPES.length];
+
+    function analyze(rows) {
+      const cols = Object.keys(rows[0] || {});
+      const info = cols.map(name => {
+        const vals = rows.map(r => r[name]);
+        const uniq = [...new Set(vals.map(v => JSON.stringify(v)))];
+        return { name, n: uniq.length, numeric: vals.every(v => typeof v === 'number' && isFinite(v)),
+                 values: uniq.map(s => JSON.parse(s)) };
+      });
+      const consts = info.filter(c => c.n <= 1);
+      const vary = info.filter(c => c.n > 1);
+      const cap = Math.max(2, Math.floor(rows.length / 2));
+      const dims = vary.filter(c => c.n <= cap && (c.n <= 12 || !c.numeric));
+      const measures = vary.filter(c => c.numeric && !dims.includes(c));
+      return { info, consts, dims, measures };
+    }
+
+    function getSpec(key, a) {
+      let s = T.specs[key];
+      if (!s || !a.dims.some(d => d.name === s.x)) {
+        const sorted = [...a.dims].sort((p, q) => q.n - p.n);
+        s = { x: (sorted[0] || {}).name || '', scale: 'auto', table: false,
+              hide: [], filter: {} };
+      }
+      s.hide = (s.hide || []).filter(h => a.measures.some(m => m.name === h));
+      T.specs[key] = s; return s;
+    }
+    function setSpec(key, patch) { Object.assign(T.specs[key], patch); saveT(); rerenderDataset(key); }
+    const dsHosts = {};
+    function rerenderDataset(key) { const h = dsHosts[key]; if (h) renderDataset(h.host, h.ds, key); }
+
+    const cmpVal = (a, b) => (typeof a === 'number' && typeof b === 'number') ? a - b : String(a) < String(b) ? -1 : 1;
+    const fmtNum = v => {
+      if (v === null || v === undefined) return '—';
+      if (typeof v !== 'number') return String(v);
+      const a = Math.abs(v);
+      if (a === 0) return '0';
+      // Swept parameters are usually exact integers (65536, 131072). Rounding
+      // them to 4 significant digits would misreport what was actually run.
+      if (Number.isInteger(v) && a < 1e15) return String(v);
+      if (a >= 1e6 || a < 1e-3) return v.toExponential(1);
+      return String(+v.toPrecision(4));
+    };
+
+    function renderDataset(host, ds, key) {
+      if (!host) return;
+      dsHosts[key] = { host, ds };
+      const rows = ds.rows, a = analyze(rows), s = getSpec(key, a);
+
+      if (!a.measures.length || !s.x) {                 // nothing to plot: the table is the chart
+        host.innerHTML = `<h4 style="margin:2px 2px 6px">${escapeHtml(ds.name)} <span class="t-count">${rows.length} rows</span></h4>
+          <div class="t-table-wrap">${tableHTML(rows)}</div>`;
+        return;
+      }
+
+      const others = a.dims.filter(d => d.name !== s.x);
+      const kept = rows.filter(r => others.every(d => !s.filter[d.name] || String(r[d.name]) === s.filter[d.name]));
+      const facetDims = others.filter(d => !s.filter[d.name]);
+      const groups = new Map();
+      for (const r of kept) {
+        const k = facetDims.map(d => `${d.name}=${fmtNum(r[d.name])}`).join(' · ');
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(r);
+      }
+      const shown = a.measures.filter(m => !s.hide.includes(m.name));
+      const slotOf = name => a.measures.findIndex(m => m.name === name);
+      const colorOf = name => SERIES[slotOf(name) % SERIES.length];
+      const shapeOf = name => shapeOfIdx(slotOf(name));
+      const facets = [...groups.entries()].slice(0, 12);
+
+      host.innerHTML = `
+        <h4 style="margin:2px 2px 6px">${escapeHtml(ds.name)} <span class="t-count">${rows.length} rows</span>
+          ${a.consts.length ? `<span class="t-muted t-h4note">${a.consts.map(c => `${escapeHtml(c.name)} ${escapeHtml(String(c.values[0]))}`).join(' · ')}</span>` : ''}</h4>
+        <div class="t-ctrl">
+          <span>x</span><select onchange="setSpec('${key}',{x:this.value})">
+            ${a.dims.map(d => `<option value="${escapeHtml(d.name)}" ${d.name === s.x ? 'selected' : ''}>${escapeHtml(d.name)}</option>`).join('')}</select>
+          ${others.map(d => `<span>${escapeHtml(d.name)}</span><select onchange="setFilter('${key}','${escapeHtml(d.name)}',this.value)">
+            <option value="">all (${d.n})</option>
+            ${[...d.values].sort(cmpVal).map(v => `<option value="${escapeHtml(String(v))}" ${s.filter[d.name] === String(v) ? 'selected' : ''}>${escapeHtml(fmtNum(v))}</option>`).join('')}</select>`).join('')}
+          <div class="seg">
+            <button class="${s.scale !== 'linear' ? 'on' : ''}" onclick="setSpec('${key}',{scale:'auto'})">log</button>
+            <button class="${s.scale === 'linear' ? 'on' : ''}" onclick="setSpec('${key}',{scale:'linear'})">linear</button>
+          </div>
+          <div class="seg">
+            <button class="${!s.table ? 'on' : ''}" onclick="setSpec('${key}',{table:false})">chart</button>
+            <button class="${s.table ? 'on' : ''}" onclick="setSpec('${key}',{table:true})">table</button>
+          </div>
+          ${groups.size > 12 ? `<span style="color:#d29922">showing 12 of ${groups.size} panels — filter to narrow</span>` : ''}
+        </div>
+        ${s.table ? `<div class="t-table-wrap">${tableHTML(kept)}</div>` : `
+          <div class="t-legend">${a.measures.map(m => `
+            <label class="${s.hide.includes(m.name) ? 'off' : ''}" onclick="toggleSeries('${key}','${escapeHtml(m.name).replace(/'/g, '&#39;')}')">
+              <svg class="sw" viewBox="0 0 22 10" aria-hidden="true"><line x1="1" y1="5" x2="21" y2="5" stroke="${colorOf(m.name)}" stroke-width="2" stroke-linecap="round"/>
+                ${markPath(shapeOf(m.name), 11, 5, 3.4)} fill="${colorOf(m.name)}" stroke="#161b22" stroke-width="1.2"/></svg>${escapeHtml(m.name)}</label>`).join('')}</div>
+          ${shown.length ? `<div class="t-figs">${facets.map(([k, rs], i) =>
+            chartFig(rs, s.x, shown.map(m => m.name), s.scale, k || ds.name, colorOf, shapeOf, `${key}|${i}`)).join('')}</div>`
+            : `<div class="t-empty">Every series is hidden — click one in the legend.</div>`}`}`;
+    }
+
+    function setFilter(key, dim, val) {
+      const f = { ...T.specs[key].filter }; if (val) f[dim] = val; else delete f[dim];
+      setSpec(key, { filter: f });
+    }
+    function toggleSeries(key, name) {
+      const h = T.specs[key].hide || [];
+      setSpec(key, { hide: h.includes(name) ? h.filter(x => x !== name) : [...h, name] });
+    }
+
+    // ── One figure ─────────────────────────────────────────────────────────
+    const W = 360, H = 220, PL = 48, PR = 66, PT = 10, PB = 30, INSET = 7;
+
+    function niceTicks(lo, hi, n) {
+      if (!(hi > lo)) return [lo];
+      const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      const step = ([1, 2, 2.5, 5, 10].find(m => m * mag >= raw) || 10) * mag;
+      const out = [];
+      for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(+v.toPrecision(12));
+      return out;
+    }
+    function logTicks(lo, hi) {
+      const d0 = Math.floor(Math.log10(lo)), d1 = Math.ceil(Math.log10(hi));
+      const mult = (d1 - d0) <= 3 ? [1, 2, 5] : (d1 - d0) <= 6 ? [1] : [1];
+      const out = [];
+      for (let d = d0; d <= d1; d++) for (const m of mult) {
+        const v = m * Math.pow(10, d);
+        if (v >= lo * 0.999 && v <= hi * 1.001) out.push(v);
+      }
+      return out.length >= 2 ? out : niceTicks(lo, hi, 4);
+    }
+
+    function chartFig(rows, xcol, names, scaleMode, title, colorOf, shapeOf, cid) {
+      const xs = [...new Set(rows.map(r => r[xcol]))].sort(cmpVal);
+      const series = names.map(name => ({
+        name, color: colorOf(name), shape: shapeOf(name),
+        pts: xs.map(xv => { const r = rows.find(q => q[xcol] === xv); const v = r ? r[name] : null;
+                            return (typeof v === 'number' && isFinite(v)) ? v : null; }),
+      }));
+      const vals = series.flatMap(s => s.pts).filter(v => v !== null);
+      if (!vals.length) return `<div class="t-fig"><h6>${escapeHtml(title)}</h6><div class="cap">no numeric values</div></div>`;
+      let lo = Math.min(...vals), hi = Math.max(...vals);
+      // Log only when it is both legal and useful; never silently on zeros.
+      const log = scaleMode !== 'linear' && lo > 0 && hi / lo >= 20;
+      if (lo === hi) { lo = log ? lo / 2 : lo - 1; hi = log ? hi * 2 : hi + 1; }
+      const fwd = log ? Math.log10 : (v => v);
+      let a = fwd(lo), b = fwd(hi); const padv = (b - a) * 0.06; a -= padv; b += padv;
+      const ticks = log ? logTicks(Math.pow(10, a), Math.pow(10, b)) : niceTicks(a, b, 4);
+
+      const pw = W - PL - PR, ph = H - PT - PB;
+      const xAt = i => xs.length === 1 ? PL + pw / 2 : PL + INSET + i * ((pw - 2 * INSET) / (xs.length - 1));
+      const yAt = v => PT + ph - ((fwd(v) - a) / (b - a)) * ph;
+
+      let svg = '';
+      for (const t of ticks) {
+        const y = yAt(t);
+        if (y < PT - 1 || y > PT + ph + 1) continue;
+        svg += `<line class="t-grid-line" x1="${PL}" y1="${y.toFixed(1)}" x2="${PL + pw}" y2="${y.toFixed(1)}"/>`
+             + `<text class="t-tick" x="${PL - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end">${fmtNum(t)}</text>`;
+      }
+      svg += `<line class="t-axis" x1="${PL}" y1="${PT + ph}" x2="${PL + pw}" y2="${PT + ph}"/>`;
+      xs.forEach((xv, i) => {
+        svg += `<text class="t-tick" x="${xAt(i).toFixed(1)}" y="${PT + ph + 13}" text-anchor="middle">${escapeHtml(fmtNum(xv))}</text>`;
+      });
+      svg += `<text class="t-alab" x="${PL + pw / 2}" y="${H - 3}" text-anchor="middle">${escapeHtml(xcol)}</text>`;
+
+      for (const s of series) {
+        let d = '', pen = false;
+        s.pts.forEach((v, i) => {
+          if (v === null) { pen = false; return; }
+          d += `${pen ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`; pen = true;
+        });
+        svg += `<path class="t-line" d="${d}" stroke="${s.color}"/>`;
+        s.pts.forEach((v, i) => { if (v !== null)
+          svg += `${markPath(s.shape, xAt(i), yAt(v), 3.4)} class="t-mark" fill="${s.color}"/>`; });
+      }
+      // Direct labels for a readable number of series; past that the legend
+      // and the tooltip carry identity and the ends would collide anyway.
+      if (series.length <= 4) {
+        const ends = series.map(s => { const i = s.pts.map((v, j) => v === null ? -1 : j).filter(j => j >= 0).pop();
+                                       return i === undefined ? null : { s, x: xAt(i), y: yAt(s.pts[i]) }; })
+                           .filter(Boolean).sort((p, q) => p.y - q.y);
+        for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 11);
+        for (const e of ends)
+          svg += `<text class="t-dlab" x="${(e.x + 7).toFixed(1)}" y="${(e.y + 3).toFixed(1)}">${escapeHtml(e.s.name.slice(0, 11))}</text>`;
+      }
+      svg += `<rect class="t-hit" data-cid="${cid}" x="${PL}" y="${PT}" width="${pw}" height="${ph}"/>`
+           + `<line class="t-cross" id="cx-${cid}" x1="0" y1="${PT}" x2="0" y2="${PT + ph}" style="display:none"/>`;
+
+      chartHover[cid] = { xs, series, xcol, xAt, PL, pw, PT, ph, title };
+      return `<div class="t-fig"><h6>${escapeHtml(title)}</h6>
+        <div class="cap">${log ? 'log scale' : 'linear scale'} · ${xs.length} points${series.length > 4 ? ' · ' + series.length + ' series' : ''}</div>
+        <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(title)}">${svg}</svg></div>`;
+    }
+
+    // Crosshair + tooltip: the hit area is the whole plot, so no pixel hunting.
+    function chartMove(e) {
+      const hit = e.target.closest('.t-hit'); const tip = tipEl();
+      if (!hit) { tip.style.display = 'none'; document.querySelectorAll('.t-cross').forEach(c => c.style.display = 'none'); return; }
+      const cid = hit.dataset.cid, c = chartHover[cid]; if (!c) return;
+      const svg = hit.ownerSVGElement, box = svg.getBoundingClientRect();
+      const vx = (e.clientX - box.left) / box.width * W;
+      let best = 0, bd = Infinity;
+      c.xs.forEach((_, i) => { const d = Math.abs(c.xAt(i) - vx); if (d < bd) { bd = d; best = i; } });
+      const line = document.getElementById(`cx-${cid}`);
+      if (line) { line.setAttribute('x1', c.xAt(best)); line.setAttribute('x2', c.xAt(best)); line.style.display = ''; }
+      tip.innerHTML = `<div class="hd">${escapeHtml(c.title ? c.title + ' · ' : '')}${escapeHtml(c.xcol)} ${escapeHtml(fmtNum(c.xs[best]))}</div>`
+        + c.series.filter(s => s.pts[best] !== null)
+            .sort((p, q) => q.pts[best] - p.pts[best])
+            .map(s => `<div class="rw"><svg class="sw" viewBox="0 0 10 10" aria-hidden="true">${markPath(s.shape, 5, 5, 3.6)} fill="${s.color}"/></svg>${escapeHtml(s.name)}<span class="v">${fmtNum(s.pts[best])}</span></div>`).join('');
+      tip.style.display = '';
+      const tb = tip.getBoundingClientRect();
+      tip.style.left = Math.min(e.clientX + 14, window.innerWidth - tb.width - 8) + 'px';
+      tip.style.top = Math.max(8, Math.min(e.clientY - 10, window.innerHeight - tb.height - 8)) + 'px';
+    }
+    function tipEl() {
+      let t = document.getElementById('t-tip');
+      if (!t) { t = document.createElement('div'); t.id = 't-tip'; t.className = 't-tip'; t.style.display = 'none'; document.body.appendChild(t); }
+      return t;
+    }
+    document.addEventListener('mousemove', chartMove);
+
+    function tableHTML(rows) {
+      if (!rows.length) return '<div class="t-empty">empty</div>';
+      const cols = Object.keys(rows[0]);
+      const a = analyze(rows), dim = new Set(a.dims.concat(a.consts).map(c => c.name));
+      return `<table class="t-table"><thead><tr>${cols.map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>`
+        + rows.map(r => `<tr>${cols.map(c => `<td class="${dim.has(c) ? 'dim' : ''}">${escapeHtml(fmtNum(r[c]))}</td>`).join('')}</tr>`).join('')
+        + '</tbody></table>';
+    }
+
+
+    // ── New benchmark ──────────────────────────────────────────────────────
+    function renderBenchForm(host) {
+      const head = benchMeta.pr_head || '';
+      host.innerHTML = `
+        <div class="t-head">
+          <h3>New benchmark</h3>
+          <div class="t-sub">Runs on HF Jobs against this PR's code. Everything below is stored with the run, so it can be re-run exactly later.</div>
+        </div>
+        <div class="t-pane"><div class="t-form">
+          <div class="t-cols">
+            <div class="t-field" style="flex:3">
+              <label>Script <span class="hint">a path in the worktree or anywhere under your home directory</span></label>
+              <input id="b-path" value="${escapeHtml(T.bPath)}" placeholder="benchmark_v2/run_benchmarks.py  ·  ~/scripts/sweep.py" list="b-cands" spellcheck="false">
+              <datalist id="b-cands"></datalist>
+            </div>
+            <div class="t-field" style="flex:0 0 auto;display:flex;align-items:flex-end">
+              <button class="t-new" style="width:auto;margin:0 0 1px" onclick="loadScript()">Load</button>
+            </div>
+          </div>
+          <div class="t-field">
+            <label>Source <span class="hint">edit freely — what you submit is what gets stored and re-run, not the file on disk</span></label>
+            <textarea id="b-src" spellcheck="false" placeholder="Paste or load a benchmark script.
+
+Declare a BENCH_PLAN dict and it is shown as the design, next to an audit of the code itself.
+Anything printed between JSON_BEGIN and JSON_END is charted on the Plots tab.
+Anything saved to a relative path (plt.savefig('speedup.png')) is collected and uploaded.">${escapeHtml(T.bSrc)}</textarea>
+          </div>
+          <div class="t-cols">
+            <div class="t-field"><label>Name</label><input id="b-name" value="${escapeHtml(T.bName)}" placeholder="sweep.py"></div>
+            <div class="t-field"><label>Hardware</label>
+              <select id="b-flavor">${(benchMeta.flavors || FLAVORS).map(f => `<option value="${f}" ${f === T.bFlavor ? 'selected' : ''}>${f}${PRICE[f] ? ' · ' + PRICE[f] : ''}</option>`).join('')}</select></div>
+            <div class="t-field" style="flex:0 0 90px"><label>Timeout</label><input id="b-timeout" value="${escapeHtml(T.bTimeout)}"></div>
+          </div>
+          <div class="t-cols">
+            <div class="t-field"><label>Extra deps <span class="hint">on top of the script's own header</span></label>
+              <input id="b-deps" value="${escapeHtml(T.bDeps)}" placeholder="matplotlib pandas" spellcheck="false"></div>
+            <div class="t-field"><label>Env</label><input id="b-env" value="${escapeHtml(T.bEnv)}" placeholder="SEED=0 RUN_SLOW=1" spellcheck="false"></div>
+          </div>
+          <div class="t-field">
+            <label>Results dataset <span class="hint">private; created on first use. Plots and files the run saves land here and show up under Plots.</span></label>
+            <input id="b-repo" value="${escapeHtml(T.bRepo)}" placeholder="${escapeHtml(benchMeta.defaultRepo || 'owner/benchmark-pr-hub')}" spellcheck="false">
+          </div>
+
+          <div id="b-review" style="margin:16px 0 4px"></div>
+          <div class="t-repro" style="margin:14px 0 2px">
+            <span class="t-claim ${head ? 'ok' : 'warn'}">${head ? `pinned to PR head <b class="t-mono">${head.slice(0, 7)}</b>` : 'PR head unknown'}</span>
+            <span class="t-claim">recipe = script + deps + hardware + commit + env</span>
+          </div>
+          <div class="t-acts">
+            <button class="go" id="b-run" onclick="submitBench(this)">▶ Run benchmark</button>
+            <span class="t-muted" style="align-self:center">${escapeHtml(T.bFlavor)}${PRICE[T.bFlavor] ? ' · ' + PRICE[T.bFlavor] + ', billed until it finishes or times out' : ''}</span>
+          </div>
+        </div></div>`;
+
+      const $ = i => document.getElementById(i);
+      $('b-path').oninput = e => { T.bPath = e.target.value; saveT(); };
+      $('b-src').oninput = e => { T.bSrc = e.target.value; saveT(); reviewLater(); };
+      $('b-name').oninput = e => { T.bName = e.target.value; saveT(); };
+      $('b-deps').oninput = e => { T.bDeps = e.target.value; saveT(); };
+      $('b-env').oninput = e => { T.bEnv = e.target.value; saveT(); };
+      $('b-repo').oninput = e => { T.bRepo = e.target.value; saveT(); };
+      $('b-timeout').oninput = e => { T.bTimeout = e.target.value; saveT(); };
+      $('b-flavor').onchange = e => { T.bFlavor = e.target.value; saveT(); renderBenchDetail(); };
+      $('b-path').onkeydown = e => { if (e.key === 'Enter') loadScript(); };
+      if (!benchForm_cands) api('/api/bench/script').then(d => { benchForm_cands = d.candidates || []; fillCands(); }).catch(() => {});
+      else fillCands();
+      reviewForm();
+    }
+    let benchForm_cands = null;
+    function fillCands() {
+      const dl = document.getElementById('b-cands');
+      if (dl && benchForm_cands) dl.innerHTML = benchForm_cands.map(c => `<option value="${escapeHtml(c)}">`).join('');
+    }
+
+    // Re-reviewing on every keystroke would parse the script hundreds of times
+    // while a paste settles; wait for a pause instead.
+    function reviewLater() { clearTimeout(reviewLater._t); reviewLater._t = setTimeout(reviewForm, 450); }
+
+    async function reviewForm() {
+      const host = document.getElementById('b-review'); if (!host) return;
+      if (!T.bSrc.trim()) {
+        host.innerHTML = `<section class="t-block"><header><h4>Design review</h4></header>
+          <div class="t-empty" style="padding:6px 0">Load or paste a script and it is reviewed here —
+          what it claims to do, and what reading its code actually shows — before you pay for the hardware.</div></section>`;
+        return;
+      }
+      const d = await post('/api/bench/review', { script: T.bSrc }).catch(() => ({}));
+      if (!document.getElementById('b-review')) return;
+      host.innerHTML = declaredHTML(d.plan, 'source') + auditHTML(d.audit);
+    }
+
+    async function loadScript() {
+      const path = document.getElementById('b-path').value.trim();
+      if (!path) return flash('give a path first', true);
+      const d = await api('/api/bench/script', `&path=${encodeURIComponent(path)}`).catch(() => ({ error: 'request failed' }));
+      if (d.error) return flash(d.error, true);
+      T.bSrc = d.source; T.bName = d.name || 'bench.py'; saveT();
+      renderBenchDetail(); flash(`loaded ${d.name}`);
+    }
+
+    const parseKV = s => Object.fromEntries((s || '').split(/\s+/).filter(Boolean)
+      .map(p => p.split('=')).filter(p => p.length === 2));
+
+    async function submitBench(btn) {
+      if (!T.bSrc.trim()) return flash('no script — load a path or paste one', true);
+      if (!SMALL.has(T.bFlavor) && btn.dataset.armed !== '1') {
+        btn.dataset.armed = '1'; btn.textContent = `confirm ${T.bFlavor}${PRICE[T.bFlavor] ? ' · ' + PRICE[T.bFlavor] : ''}`;
+        setTimeout(() => { btn.dataset.armed = ''; btn.textContent = '▶ Run benchmark'; }, 7000); return;
+      }
+      btn.disabled = true; btn.dataset.armed = ''; btn.textContent = 'submitting…';
+      const r = await post('/api/bench/run', {
+        script: T.bSrc, name: T.bName || 'bench.py', flavor: T.bFlavor, timeout: T.bTimeout,
+        deps: (T.bDeps || '').split(/\s+/).filter(Boolean), env: parseKV(T.bEnv),
+        artifacts_repo: T.bRepo.trim(),
+      });
+      btn.disabled = false; btn.textContent = '▶ Run benchmark';
+      if (r.error) return flash(r.error, true);
+      flash(`submitted ${r.run.id} · recipe ${r.run.recipe}`);
+      await renderBenchRail();
+      selectBench('bench:' + r.run.id);
+    }
+
+    // ── Test runs ──────────────────────────────────────────────────────────
+    function renderTestForm(host) {
+      host.innerHTML = `
+        <div class="t-head">
+          <h3>Run tests</h3>
+          <div class="t-sub">pytest against this PR's checkout. Local first — it is seconds, not minutes.</div>
+        </div>
+        <div class="t-pane"><div class="t-form">
+          <div class="t-field"><label>Target <span class="hint">paths or node ids, space separated</span></label>
+            <input id="t-target" value="${escapeHtml(T.target)}" placeholder="tests/models/llama/test_modeling_llama.py::LlamaModelTest" spellcheck="false"></div>
+          <div class="t-cols">
+            <div class="t-field"><label>Extra pytest args</label><input id="t-args" value="${escapeHtml(T.args)}" placeholder="-k generation -x" spellcheck="false"></div>
+            <div class="t-field"><label>Where</label>
+              <select id="t-where">
+                <option value="local" ${T.where === 'local' ? 'selected' : ''}>local — in the worktree, seconds</option>
+                <option value="box" ${T.where === 'box' ? 'selected' : ''}>warm GPU box — seconds</option>
+                <option value="job" ${T.where === 'job' ? 'selected' : ''}>one-shot HF Job — minutes of startup</option>
+              </select></div>
+          </div>
+          <div class="t-cols" id="t-where-extra"></div>
+          <div class="t-acts"><button class="go" id="t-run" onclick="submitRun(this)">▶ Run</button></div>
+          <div class="t-field t-env" id="t-env" style="margin-top:16px"><span class="t-muted">checking local env…</span></div>
+        </div></div>`;
+      const $ = i => document.getElementById(i);
       $('t-target').oninput = e => { T.target = e.target.value; saveT(); };
       $('t-args').oninput = e => { T.args = e.target.value; saveT(); };
-      $('t-flavor').onchange = e => { T.flavor = e.target.value; saveT(); };
-      $('t-timeout').oninput = e => { T.timeout = e.target.value; saveT(); };
-      $('t-box').onchange = e => { T.box = e.target.value; saveT(); };
-      document.querySelectorAll('.t-where button').forEach(b => b.onclick = () => { T.where = b.dataset.w; saveT(); syncWhere(); });
-      $('t-run').onclick = () => submitRun($('t-run'));
+      $('t-where').onchange = e => { T.where = e.target.value; saveT(); renderTestsDetail(); };
       $('t-target').onkeydown = e => { if (e.key === 'Enter') submitRun($('t-run')); };
-      syncWhere();
-    }
-
-    function syncWhere() {
-      document.querySelectorAll('.t-where button').forEach(b => b.classList.toggle('on', b.dataset.w === T.where));
-      const form = document.getElementById('t-form');
-      form.classList.toggle('w-box', T.where === 'box');
-      form.classList.toggle('w-job', T.where === 'job');
-      const sel = document.getElementById('t-box');
-      sel.innerHTML = boxes.length
-        ? boxes.map(b => `<option value="${b.id}" ${b.id === T.box ? 'selected' : ''}>${escapeHtml(b.flavor)} · ${b.id.slice(-6)} · up ${timeAgo(b.created_at)}</option>`).join('')
-        : '<option value="">no running box — start one below</option>';
-      if (boxes.length && !boxes.some(b => b.id === T.box)) { T.box = boxes[0].id; saveT(); sel.value = T.box; }
-      const btn = document.getElementById('t-run');
-      btn.textContent = T.where === 'local' ? '▶ Run locally' : T.where === 'box' ? '▶ Run on box' : '▶ Submit job';
-      btn.disabled = T.where === 'box' && !boxes.length;
+      const extra = $('t-where-extra');
+      if (T.where === 'box') extra.innerHTML = `<div class="t-field"><label>Box</label><select id="t-box">${
+        boxes.length ? boxes.map(b => `<option value="${b.id}" ${b.id === T.box ? 'selected' : ''}>${escapeHtml(b.flavor)} · ${b.id.slice(-6)} · up ${timeAgo(b.created_at)}</option>`).join('')
+                     : '<option value="">no running box — start one from the rail</option>'}</select></div>`;
+      else if (T.where === 'job') extra.innerHTML = `
+        <div class="t-field"><label>Hardware</label><select id="t-flavor">${FLAVORS.map(f => `<option value="${f}" ${f === T.flavor ? 'selected' : ''}>${f}${PRICE[f] ? ' · ' + PRICE[f] : ''}</option>`).join('')}</select></div>
+        <div class="t-field" style="flex:0 0 90px"><label>Timeout</label><input id="t-timeout" value="${escapeHtml(T.timeout)}"></div>`;
+      if ($('t-box')) $('t-box').onchange = e => { T.box = e.target.value; saveT(); };
+      if ($('t-flavor')) $('t-flavor').onchange = e => { T.flavor = e.target.value; saveT(); };
+      if ($('t-timeout')) $('t-timeout').oninput = e => { T.timeout = e.target.value; saveT(); };
+      refreshEnv();
     }
 
     async function refreshEnv() {
       const el = document.getElementById('t-env'); if (!el) return;
       const d = await api('/api/tests/local', '&env=1').catch(() => ({}));
       envInfo = d.env || null;
+      if (!document.getElementById('t-env')) return;
       if (!envInfo) { el.innerHTML = '<span class="t-bad">env status unavailable</span>'; return; }
       const e = envInfo;
-      const ok = e.env_ready && e.uses_pr_code;
-      el.innerHTML = `
-        <span class="t-pill ${e.env_ready ? 'ok' : 'warn'}">${e.env_ready ? 'PR venv ready (editable install)' : 'PR venv not built'}</span>
-        ${e.deps_stale ? '<span class="t-pill warn" title="setup.py/pyproject changed since install; next run reinstalls">deps changed, will reinstall</span>' : ''}
-        ${e.env_ready ? `<span class="t-pill ${e.uses_pr_code ? 'ok' : 'bad'}" title="${escapeHtml(e.transformers_from || '')}">${e.uses_pr_code ? 'imports this PR’s code' : 'NOT importing PR code'}</span>` : ''}
-        ${e.python ? `<span class="t-muted">py ${escapeHtml(e.python)} · torch ${escapeHtml(e.torch)} · deps ${escapeHtml(e.deps_installed_at || '?')}</span>` : ''}
-        ${e.import_error ? `<span class="t-bad" title="${escapeHtml(e.import_error)}">import error — PR may add a dependency</span>` : ''}
-        ${!e.env_ready ? '<span class="t-muted">first local run does <code>uv pip install -e .[testing]</code> for this checkout (about a minute with a warm uv cache)</span>' : ''}
-        <span class="t-grow"></span>
-        <a href="#" onclick="refreshDeps();return false" title="redo uv pip install -e .[testing] for this PR">reinstall</a>
-        <a href="#" onclick="refreshEnv();return false">re-check</a>`;
+      el.innerHTML = `<div class="t-repro" style="margin:0">
+        <span class="t-claim ${e.env_ready ? 'ok' : 'warn'}">${e.env_ready ? 'PR venv ready (editable install)' : 'PR venv not built'}</span>
+        ${e.deps_stale ? '<span class="t-claim warn" title="setup.py/pyproject changed since install; the next run reinstalls">deps changed, will reinstall</span>' : ''}
+        ${e.env_ready ? `<span class="t-claim ${e.uses_pr_code ? 'ok' : 'warn'}" title="${escapeHtml(e.transformers_from || '')}">${e.uses_pr_code ? 'imports this PR’s code' : 'NOT importing PR code'}</span>` : ''}
+        ${e.python ? `<span class="t-claim">py ${escapeHtml(e.python)} · torch ${escapeHtml(e.torch || '?')} · deps ${escapeHtml(e.deps_installed_at || '?')}</span>` : ''}
+        ${e.import_error ? `<span class="t-claim warn" title="${escapeHtml(e.import_error)}">import error — PR may add a dependency</span>` : ''}
+        <span class="t-claim link" onclick="refreshDeps()">reinstall</span>
+        <span class="t-claim link" onclick="refreshEnv()">re-check</span></div>
+        ${!e.env_ready ? '<div class="t-muted" style="margin-top:6px">The first local run does <code>uv pip install -e .[testing]</code> for this checkout — about a minute with a warm uv cache.</div>' : ''}`;
     }
 
     async function refreshDeps() {
       const r = await post('/api/tests/local', { target: 'tests/utils/test_versions_utils.py', pytest_args: '', refresh: true });
       if (r.error) return flash(r.error, true);
-      runLogs[r.run.id] = { offset: 0, text: '', open: true };
-      flash(`rebuilding deps (run ${r.run.id})`); renderRuns();
-    }
-
-    const post = (path, body) => fetch(path, { method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ repo: REPO, number: NUMBER, ...body }) }).then(r => r.json()).catch(() => ({ error: 'request failed' }));
-
-    function flash(text, bad) {
-      let el = document.getElementById('t-flash');
-      if (!el) { el = document.createElement('div'); el.id = 't-flash'; document.getElementById('t-form').appendChild(el); }
-      el.className = bad ? 'bad' : 'ok'; el.textContent = text;
-      clearTimeout(el._t); el._t = setTimeout(() => el.remove(), bad ? 9000 : 4000);
+      flash(`rebuilding deps (run ${r.run.id})`);
+      await renderTestsRail(); selectTest('test:' + r.run.id);
     }
 
     async function submitRun(btn) {
       const target = T.target.trim();
       if (!target) return flash('give a pytest target first', true);
-      if (T.where !== 'local' && !SMALL.has(T.flavor) && T.where === 'job' && btn.dataset.armed !== '1') {
-        btn.dataset.armed = '1'; btn.textContent = `confirm ${T.flavor}`; btn.classList.add('arm');
-        setTimeout(() => { btn.dataset.armed = ''; btn.classList.remove('arm'); syncWhere(); }, 6000); return;
+      if (T.where === 'job' && !SMALL.has(T.flavor) && btn.dataset.armed !== '1') {
+        btn.dataset.armed = '1'; btn.textContent = `confirm ${T.flavor}`;
+        setTimeout(() => { btn.dataset.armed = ''; btn.textContent = '▶ Run'; }, 6000); return;
       }
-      btn.disabled = true; btn.dataset.armed = ''; btn.classList.remove('arm'); const label = btn.textContent; btn.textContent = '…';
+      btn.disabled = true; btn.dataset.armed = ''; btn.textContent = '…';
       let r;
       if (T.where === 'local') r = await post('/api/tests/local', { target, pytest_args: T.args });
       else if (T.where === 'box') r = await post('/api/jobs/warm/run', { id: T.box, target, pytest_args: T.args });
       else r = await post('/api/jobs/run-tests', { target, pytest_args: T.args, flavor: T.flavor, timeout: T.timeout });
-      btn.disabled = false; btn.textContent = label;
+      btn.disabled = false; btn.textContent = '▶ Run';
       if (r.error) return flash(r.error, true);
-      if (r.run) { runLogs[r.run.id] = { offset: 0, text: '', open: true }; flash(`run ${r.run.id} started`); renderRuns(); }
-      else { flash(`job ${r.id} submitted on ${r.flavor}`); setTimeout(renderJobs, 1500); }
+      if (r.run) { await renderTestsRail(); selectTest('test:' + r.run.id); }
+      else { flash(`job ${r.id} submitted on ${r.flavor}`); renderTestsRail(); }
     }
 
-    // ── Runs (local + box) ──
-    async function renderRuns() {
-      const host = document.getElementById('t-runs'); if (!host) return;
-      const d = await api('/api/tests/local').catch(() => ({ error: 'request failed' }));
-      if (d.error) { host.innerHTML = `<div class="panel-err">${escapeHtml(d.error)}</div>`; return; }
-      const cls = s => ({ passed: 'pass', failed: 'fail', running: 'pending' })[s] || 'skipping';
-      host.innerHTML = `<h4>Runs <span class="t-count">${d.runs.length}</span></h4>` +
-        (d.runs.map(r => `
-          <div class="chk ${cls(r.status)}" data-run="${r.id}">
-            <span class="dot"></span>
-            <span class="t-status">${escapeHtml(r.status)}</span>
-            <span class="t-where-tag">${r.box ? 'box ' + escapeHtml(r.box.slice(-6)) : 'local'}</span>
-            <span class="nm t-mono" title="${escapeHtml(r.target)}">${escapeHtml(r.pytest_args ? r.pytest_args + ' ' : '')}${escapeHtml(r.target)}</span>
-            <span class="t-muted">${r.ended ? Math.round(r.ended - r.started) + 's' : timeAgo(new Date(r.started * 1000).toISOString()) + ' ago'}</span>
-            <button onclick="toggleRunLog('${r.id}')">${runLogs[r.id]?.open ? 'hide' : 'log'}</button>
-            ${r.status === 'running' ? `<button onclick="post('/api/tests/local/cancel',{id:'${r.id}'}).then(renderRuns)">cancel</button>` : ''}
-          </div>${runLogs[r.id]?.open ? `<pre class="chk-log" id="rl-${r.id}"></pre>` : ''}`).join('')
-        || '<div class="t-empty">No runs yet. Pick a target above and press Run, or type <code>/test …</code> in the session.</div>');
-      for (const r of d.runs) if (runLogs[r.id]?.open) pumpRunLog(r.id);
-      if (d.runs.some(r => r.status === 'running')) { clearTimeout(renderRuns._t); renderRuns._t = setTimeout(renderRuns, 2500); }
+    function renderTestRun(host, id) {
+      const r = testRuns.find(x => x.id === id);
+      if (!r) { host.innerHTML = `<div class="t-pane"><div class="t-empty">That run is gone.</div></div>`; return; }
+      const st = r.status === 'passed' ? 'ok' : r.status === 'failed' ? 'bad' : r.status === 'running' ? 'run' : 'idle';
+      host.innerHTML = `
+        <div class="t-head">
+          <h3>${escapeHtml((r.target || '').split(' ')[0].split('/').pop())} <span class="t-stage ${st}">${escapeHtml(r.status)}</span></h3>
+          <div class="t-sub"><span class="t-mono">${escapeHtml(r.pytest_args ? r.pytest_args + ' ' : '')}${escapeHtml(r.target)}</span></div>
+          <div class="t-repro">
+            <span class="t-claim">${r.box ? 'warm box ' + escapeHtml(r.box.slice(-6)) : 'local, in the PR worktree'}</span>
+            <span class="t-claim">${r.ended ? Math.round(r.ended - r.started) + 's' : 'running for ' + timeAgo(new Date(r.started * 1000).toISOString())}</span>
+            ${r.rc !== null && r.rc !== undefined ? `<span class="t-claim">exit ${r.rc}</span>` : ''}
+          </div>
+          <div class="t-acts">
+            ${r.status === 'running' ? `<button onclick="post('/api/tests/local/cancel',{id:'${id}'}).then(()=>{renderTestsRail();renderTestsDetail()})">Cancel</button>` : ''}
+            <button onclick="T.target='${escapeHtml(r.target)}';T.args='${escapeHtml(r.pytest_args || '')}';saveT();selectTest('new-test')">Run again</button>
+          </div>
+        </div>
+        <div class="t-pane"><pre class="chk-log" style="max-height:none" id="t-logpre">loading…</pre></div>`;
+      runLogs[id] = { offset: 0, text: '' };
+      pumpRunLog(id);
     }
+
     async function pumpRunLog(id) {
-      const st = runLogs[id]; const pre = document.getElementById(`rl-${id}`); if (!st || !pre) return;
+      const st = runLogs[id], pre = document.getElementById('t-logpre');
+      if (!st || !pre || T.selTest !== 'test:' + id) return;
       const d = await fetch(`/api/tests/local/log?id=${id}&offset=${st.offset}`).then(r => r.json()).catch(() => ({}));
+      if (T.selTest !== 'test:' + id) return;
       if (d.text) { st.text += d.text; st.offset = d.offset; }
-      pre.innerHTML = escapeHtml(st.text.slice(-60000) || '(no output yet)').replace(/^(FAILED .*|ERROR .*|Traceback.*|E\s{2,}.*|.*Error: .*)$/gm, '<span class="hl">$1</span>')
+      pre.innerHTML = escapeHtml(st.text.slice(-200000) || '(no output yet)')
+        .replace(/^(FAILED .*|ERROR .*|Traceback.*|E\s{2,}.*|.*Error: .*)$/gm, '<span class="hl">$1</span>')
         .replace(/^(PASSED .*|=+ .*passed.* =+)$/gm, '<span class="ok">$1</span>');
       pre.scrollTop = pre.scrollHeight;
+      if (d.status === 'running') return setTimeout(() => pumpRunLog(id), 2000);
+      // The run just ended. Re-rendering the pane would reset the log we have
+      // been streaming, so settle the header in place instead.
+      await renderTestsRail();
+      if (T.selTest !== 'test:' + id) return;
+      const fresh = testRuns.find(x => x.id === id);
+      const chip = document.querySelector('#tests-detail .t-stage');
+      if (fresh && chip) {
+        chip.textContent = fresh.status;
+        chip.className = 't-stage ' + (fresh.status === 'passed' ? 'ok' : fresh.status === 'failed' ? 'bad' : 'idle');
+      }
+      document.querySelectorAll('#tests-detail .t-acts button').forEach(b => {
+        if (b.textContent.trim() === 'Cancel') b.remove();
+      });
     }
-    function toggleRunLog(id) { runLogs[id] = runLogs[id] || { offset: 0, text: '', open: false }; runLogs[id].open = !runLogs[id].open; renderRuns(); }
 
-    // ── Boxes (running shell jobs, any PR) ──
-    async function renderBoxes() {
-      const host = document.getElementById('t-boxes'); if (!host) return;
-      const d = await fetch('/api/jobs/warm').then(r => r.json()).catch(() => ({ error: 'request failed' }));
-      if (d.error) { host.innerHTML = `<div class="panel-err">${escapeHtml(d.error)}</div>`; return; }
-      boxes = d.boxes; syncWhere();
-      host.innerHTML = `<h4>Boxes <span class="t-count">${boxes.length}</span>
-          <span class="t-muted t-h4note">a box is a running HF Job with sshd + a browser terminal, PR checked out in /work; runs on it take seconds${d.ssh_ready ? '' : ' · local cloudflared missing, ssh disabled'}</span></h4>` +
-        boxes.map(b => `
-          <div class="chk pending" data-id="${b.id}">
-            <span class="dot"></span>
-            <span class="t-status">${escapeHtml(b.flavor)}</span>
-            <span class="nm"><span class="t-mono">${b.id}</span> <span class="t-muted">· up ${timeAgo(b.created_at)} · started for ${escapeHtml(b.for.replace(/^.*--/, '#'))}</span></span>
-            <button onclick="T.where='box';T.box='${b.id}';saveT();syncWhere();document.getElementById('t-target').focus()">use for runs</button>
-            <button onclick="openShell(this, '${b.id}')">terminal</button>
-            <button onclick="cancelJob(this, '${b.id}')">stop</button>
-            ${b.url ? `<a href="${b.url}" target="_blank">↗</a>` : ''}
-          </div>`).join('') +
-        `<div class="t-start">
-          <span class="t-muted">start a box:</span>
-          <select id="t-box-flavor">${FLAVORS.map(f => `<option value="${f}" ${f === (T.boxFlavor || 'a10g-small') ? 'selected' : ''}>${f}${PRICE[f] ? ' · ' + PRICE[f] : ''}</option>`).join('')}</select>
-          <select id="t-box-timeout">${['1h','2h','4h','8h'].map(t => `<option ${t === (T.boxTimeout || '2h') ? 'selected' : ''}>${t}</option>`).join('')}</select>
-          <button onclick="startBox(this)">Start box</button>
-          <span class="t-muted">2–5 min to come up, billed until stopped or timed out</span>
-        </div>`;
+    // ── Boxes ──────────────────────────────────────────────────────────────
+    function renderBoxForm(host) {
+      host.innerHTML = `
+        <div class="t-head"><h3>Start a warm box</h3>
+          <div class="t-sub">An HF Job with sshd, a browser terminal and this PR checked out in <span class="t-mono">/work</span>. Runs on it take seconds instead of minutes, and it is billed until stopped or timed out.</div></div>
+        <div class="t-pane"><div class="t-form">
+          <div class="t-cols">
+            <div class="t-field"><label>Hardware</label><select id="bx-flavor">${FLAVORS.map(f => `<option value="${f}" ${f === (T.boxFlavor || 'a10g-small') ? 'selected' : ''}>${f}${PRICE[f] ? ' · ' + PRICE[f] : ''}</option>`).join('')}</select></div>
+            <div class="t-field" style="flex:0 0 110px"><label>Timeout</label><select id="bx-timeout">${['1h','2h','4h','8h'].map(t => `<option ${t === (T.boxTimeout || '2h') ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+          </div>
+          <div class="t-acts"><button class="go" onclick="startBox(this)">Start box</button>
+            <span class="t-muted" style="align-self:center">2–5 minutes to come up${benchMeta.sshReady ? '' : ' · cloudflared missing locally, ssh disabled'}</span></div>
+        </div></div>`;
     }
+
     async function startBox(btn) {
-      const flavor = document.getElementById('t-box-flavor').value, timeout = document.getElementById('t-box-timeout').value;
+      const flavor = document.getElementById('bx-flavor').value, timeout = document.getElementById('bx-timeout').value;
       T.boxFlavor = flavor; T.boxTimeout = timeout; saveT();
       if (!SMALL.has(flavor) && btn.dataset.armed !== '1') {
-        btn.dataset.armed = '1'; btn.textContent = `confirm ${flavor}`; btn.classList.add('arm');
-        setTimeout(() => { btn.dataset.armed = ''; btn.textContent = 'Start box'; btn.classList.remove('arm'); }, 6000); return;
+        btn.dataset.armed = '1'; btn.textContent = `confirm ${flavor}`;
+        setTimeout(() => { btn.dataset.armed = ''; btn.textContent = 'Start box'; }, 6000); return;
       }
       btn.disabled = true; btn.textContent = '…';
       const r = await post('/api/jobs/shell', { flavor, timeout });
-      btn.disabled = false; btn.textContent = 'Start box'; btn.classList.remove('arm'); btn.dataset.armed = '';
+      btn.disabled = false; btn.textContent = 'Start box'; btn.dataset.armed = '';
       if (r.error) return flash(r.error, true);
-      flash(`box ${r.id} starting on ${r.flavor}; it appears under Boxes once running`);
-      setTimeout(renderJobs, 1500);
-    }
-    async function openShell(btn, id) {
-      btn.disabled = true; const t = btn.textContent; btn.textContent = '…';
-      const d = await fetch(`/api/jobs/shell-info?id=${id}`).then(r => r.json()).catch(() => ({}));
-      btn.disabled = false; btn.textContent = t;
-      const host = btn.closest('.chk'); const old = host.nextElementSibling;
-      if (old && old.classList.contains('chk-log')) { old.remove(); return; }
-      const pre = document.createElement('pre'); pre.className = 'chk-log';
-      if (!d.web) pre.textContent = d.ready ? 'tunnel not up yet, retry in a few seconds' : 'box still setting up (sshd, tunnels, checkout) — retry in a minute';
-      else pre.innerHTML = `browser terminal  <a href="${d.web}" target="_blank">${d.web}</a>   user <b>${escapeHtml(d.web_user)}</b>  pass <b>${escapeHtml(d.web_pass || '')}</b>
-ssh               <code>codepilot-shell --attach ${id}</code>
-run tests here    <code>/test tests/… --box ${id}</code>
-${d.ready ? 'Setup finished; /work is the PR checkout.' : 'pip install still running; pytest may not work yet.'}`;
-      host.after(pre);
+      flash(`box ${r.id} starting on ${r.flavor}; it appears in the rail once running`);
     }
 
-    // ── HF Jobs history for this PR ──
-    async function renderJobs() {
-      const host = document.getElementById('t-jobs'); if (!host) return;
-      const d = await api('/api/jobs');
-      if (d.error) { host.innerHTML = `<div class="panel-err">${escapeHtml(d.error)}</div>`; return; }
-      const n = document.getElementById('jobs-n');
-      const live = d.jobs.filter(j => running.test(j.stage)).length;
-      n.textContent = live || ''; n.classList.toggle('bad', false);
-      const cls = s => /COMPLETED/i.test(s) ? 'pass' : /ERROR|FAILED/i.test(s) ? 'fail' : running.test(s) ? 'pending' : 'skipping';
-      const kind = j => (j.labels || {})['gh-codepilot-kind'];
-      const what = j => kind(j) === 'tests' ? 'pytest ' + ((j.labels || {})['gh-codepilot-target'] || '') : kind(j) === 'shell' ? 'box (interactive)' : j.command;
-      host.innerHTML = `<h4>HF Jobs for this PR <span class="t-count">${d.jobs.length}</span>
-          <span class="t-muted t-h4note">one-shot test jobs and boxes started from here; label <span class="t-mono">${escapeHtml(d.label)}</span></span></h4>` +
-        (d.jobs.map(j => `
-          <div class="chk ${cls(j.stage)}" data-id="${j.id}">
-            <span class="dot"></span>
-            <span class="t-status">${escapeHtml(j.stage.toLowerCase())}</span>
-            <span class="t-where-tag">${escapeHtml(j.flavor)}</span>
-            <span class="nm t-mono" title="${escapeHtml(j.command)}">${escapeHtml(what(j))}</span>
-            <span class="t-muted">${timeAgo(j.created_at)} ago</span>
-            ${kind(j) === 'shell' && /RUNNING/i.test(j.stage) ? `<button onclick="openShell(this, '${j.id}')">terminal</button>` : ''}
-            <button onclick="toggleJobLog(this, '${j.id}')">log</button>
-            ${running.test(j.stage) ? `<button onclick="cancelJob(this, '${j.id}')">cancel</button>` : ''}
-            ${j.url ? `<a href="${j.url}" target="_blank">↗</a>` : ''}
-          </div>`).join('') || '<div class="t-empty">No HF Jobs yet for this PR.</div>');
+    async function renderBox(host, id) {
+      const b = boxes.find(x => x.id === id);
+      if (!b) { host.innerHTML = `<div class="t-pane"><div class="t-empty">That box is gone.</div></div>`; return; }
+      host.innerHTML = `
+        <div class="t-head"><h3>${escapeHtml(b.flavor)} <span class="t-stage run">running</span></h3>
+          <div class="t-sub"><span class="t-mono">${b.id}</span> · up ${timeAgo(b.created_at)} · started for ${escapeHtml(b.for.replace(/^.*--/, '#'))}</div>
+          <div class="t-acts">
+            <button onclick="T.where='box';T.box='${id}';saveT();selectTest('new-test')">Use for test runs</button>
+            <button onclick="cancelJob(this,'${id}')">Stop</button>
+            ${b.url ? `<a href="${b.url}" target="_blank" rel="noopener">Job ↗</a>` : ''}
+          </div></div>
+        <div class="t-pane" id="bx-info"><div class="t-empty">Looking up the tunnel…</div></div>`;
+      const d = await fetch(`/api/jobs/shell-info?id=${id}`).then(r => r.json()).catch(() => ({}));
+      const el = document.getElementById('bx-info'); if (!el || T.selTest !== 'box:' + id) return;
+      el.innerHTML = !d.web
+        ? `<div class="t-empty">${d.ready ? 'Tunnel not up yet — retry in a few seconds.' : 'Still setting up (sshd, tunnels, checkout) — retry in a minute.'}</div>`
+        : `<dl class="t-kv">
+            <dt>browser terminal</dt><dd><a href="${d.web}" target="_blank" rel="noopener" style="color:#58a6ff">${escapeHtml(d.web)}</a></dd>
+            <dt>user / pass</dt><dd>${escapeHtml(d.web_user)} / ${escapeHtml(d.web_pass || '')}</dd>
+            <dt>ssh</dt><dd>codepilot-shell --attach ${id}</dd>
+            <dt>tests here</dt><dd>/test tests/… --box ${id}</dd>
+            <dt>state</dt><dd class="${d.ready ? 'ok' : 'warn'}">${d.ready ? '/work is the PR checkout, install finished' : 'pip install still running — pytest may not work yet'}</dd>
+          </dl>`;
     }
-    async function toggleJobLog(btn, id) {
-      const host = btn.closest('.chk'); const existing = host.nextElementSibling;
-      if (existing && existing.classList.contains('chk-log')) { existing.remove(); btn.textContent = 'log'; return; }
-      btn.textContent = '…'; btn.disabled = true;
-      const d = await fetch(`/api/jobs/logs?id=${id}`).then(r => r.json());
-      btn.disabled = false; btn.textContent = 'hide';
-      const pre = document.createElement('pre'); pre.className = 'chk-log';
-      pre.innerHTML = d.error ? `<span class="hl">${escapeHtml(d.error)}</span>` : escapeHtml(d.log || '(no output yet)').replace(/^(Traceback.*|.*Error: .*|E\s{2,}.*|FAILED .*)$/gm, '<span class="hl">$1</span>');
-      host.after(pre);
-    }
+
     async function cancelJob(btn, id) {
-      if (btn.dataset.armed !== '1') { btn.dataset.armed = '1'; const t = btn.textContent; btn.textContent = 'confirm'; btn.classList.add('arm'); setTimeout(() => { btn.dataset.armed = ''; btn.textContent = t; btn.classList.remove('arm'); }, 5000); return; }
+      if (btn.dataset.armed !== '1') { btn.dataset.armed = '1'; const t = btn.textContent; btn.textContent = 'confirm'; setTimeout(() => { btn.dataset.armed = ''; btn.textContent = t; }, 5000); return; }
       btn.disabled = true; btn.textContent = '…';
       await post('/api/jobs/cancel', { id });
-      renderBoxes(); renderJobs();
+      delete detailCache[id];
+      if (view === 'bench') { await renderBenchRail(); renderBenchDetail(); }
+      else { await renderTestsRail(); renderTestsDetail(); }
     }
+
     function guessTestTarget() {
       const t = lastDiffText || '';
       return [...new Set([...t.matchAll(/^\+\+\+ b\/(tests\/\S+\.py)$/gm)].map(m => m[1]))].slice(0, 6).join(' ');
     }
-    setInterval(() => { if (view === 'jobs') { renderBoxes(); renderJobs(); } }, 20000);
+
+    // Poll only while something is actually live; an idle rail re-reading the
+    // Hub every 20 seconds is what a cache is for.
+    setInterval(() => {
+      if (!liveCount()) return;
+      if (view === 'bench' && document.getElementById('bench-rail')) renderBenchRail();
+      if (view === 'tests' && document.getElementById('tests-rail')) renderTestsRail();
+    }, 12000);
 
     // ── File tree ──
     const tree = document.getElementById('filetree');

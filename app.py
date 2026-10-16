@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_file
 from flask_socketio import SocketIO, emit
 
 import re
@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 
+import bench_runner
 import local_runner
 import pty_manager
 import repo_manager
@@ -1457,6 +1458,7 @@ def api_jobs_shell():
     r = _run(cmd, timeout=90)
     if r is None or r.returncode != 0:
         return jsonify(error=(r.stderr if r else "hf jobs run timed out").strip()[:400] or "submit failed"), 502
+    _ps_cache["at"] = 0.0
     m = re.search(r"\b([0-9a-f]{24})\b", r.stdout + r.stderr)
     return jsonify(ok=True, id=m.group(1) if m else None, head=head_sha, flavor=flavor)
 
@@ -1530,13 +1532,9 @@ def _cloudflared_bin():
 @app.route("/api/jobs/warm")
 def api_jobs_warm():
     """Running shell boxes across all PRs: any of them can run this PR's tests."""
-    r = _run(["hf", "jobs", "ps", "--format", "json"], timeout=40)
-    if r is None or r.returncode != 0:
-        return jsonify(error=(r.stderr if r else "hf jobs timed out").strip()[:300] or "hf jobs failed"), 502
-    try:
-        jobs = json.loads(r.stdout or "[]")
-    except json.JSONDecodeError:
-        return jsonify(error="unexpected hf jobs output"), 502
+    jobs, err = _hf_jobs_ps()
+    if err and not jobs:
+        return jsonify(error=err), 502
     boxes = []
     for j in jobs:
         labels = j.get("labels") or {}
@@ -1598,7 +1596,324 @@ def api_job_cancel():
     r = _run(["hf", "jobs", "cancel", job], timeout=40)
     if r is None or r.returncode != 0:
         return jsonify(error=(r.stderr if r else "timed out").strip()[:300] or "cancel failed"), 502
+    _ps_cache["at"] = 0.0
     return jsonify(ok=True)
+
+
+# ── Benchmarks on HF Jobs ────────────────────────────────────────────────────
+# A benchmark run is kept as a recipe (script + deps + flavor + commit + env)
+# hashed to a short id, so the UI can say "this ran 3 times, identically" and
+# re-running means re-submitting the same bytes rather than hoping.
+
+BENCH_FLAVORS = ["cpu-basic", "cpu-upgrade", "t4-small", "t4-medium", "l4x1", "l40sx1",
+                 "a10g-small", "a10g-large", "a10g-largex2", "a100-large",
+                 "h200", "h200x2", "h200x4", "h200x8"]
+_RUNNING = re.compile(r"RUNNING|PENDING|STARTING|SCHEDULING|UPDATING", re.I)
+
+
+def _bench_run(cmd, timeout=60):
+    """bench_runner's runner, on the eventlet-safe path."""
+    return _run(cmd, timeout=timeout)
+
+
+_hf_user_cache = None
+
+
+def _hf_user():
+    """The logged-in Hub account; fixed for the life of the process."""
+    global _hf_user_cache
+    if _hf_user_cache is None:
+        r = _run(["hf", "auth", "whoami"], timeout=20)
+        m = re.search(r"user=(\S+)", r.stdout) if r and r.returncode == 0 else None
+        _hf_user_cache = m.group(1) if m else ""
+    return _hf_user_cache
+
+
+# `hf jobs ps` is a network round trip of a second or more, and the rail, the
+# warm-box list and every run detail all want the same answer. Cache it briefly
+# so clicking around a run costs nothing; a terminal job's log is cached for
+# good, because it cannot change again.
+_PS_TTL = 8.0
+_ps_cache = {"at": 0.0, "jobs": [], "err": ""}
+_pr_head_cache = {}
+_log_cache = {}
+_TERMINAL = re.compile(r"COMPLETED|ERROR|FAILED|CANCEL", re.I)
+
+
+def _hf_jobs_ps(force=False):
+    """Every job on the account, from an at-most-_PS_TTL-seconds-old listing."""
+    now = time.time()
+    if not force and now - _ps_cache["at"] < _PS_TTL:
+        return _ps_cache["jobs"], _ps_cache["err"]
+    r = _run(["hf", "jobs", "ps", "-a", "--format", "json"], timeout=40)
+    if r is None or r.returncode != 0:
+        err = (r.stderr if r else "hf jobs timed out").strip()[:200] or "hf jobs failed"
+        # Serve the last good listing rather than blanking the UI on a blip.
+        _ps_cache["err"] = err
+        return _ps_cache["jobs"], err
+    try:
+        jobs = json.loads(r.stdout or "[]")
+    except json.JSONDecodeError:
+        return _ps_cache["jobs"], "unexpected hf jobs output"
+    _ps_cache.update(at=now, jobs=jobs, err="")
+    return jobs, ""
+
+
+def _job_log(job, stage):
+    """Fetch a job's log, remembering it once the job can no longer change it."""
+    if job in _log_cache:
+        return _log_cache[job], ""
+    r = _run(["hf", "jobs", "logs", job, "-n", "2000"], timeout=90)
+    if r is None or r.returncode != 0:
+        return "", ((r.stderr or "log fetch failed").strip()[:200] if r else "log fetch timed out")
+    if _TERMINAL.search(stage or ""):
+        _log_cache[job] = r.stdout
+    return r.stdout, ""
+
+
+def _bench_stages(repo, number):
+    """Live stage for every job of this PR, keyed by id."""
+    jobs, err = _hf_jobs_ps()
+    if err and not jobs:
+        return {}, err
+    out = {}
+    for j in jobs:
+        st = j.get("status") or {}
+        out[j.get("id")] = {
+            "stage": (st.get("stage") if isinstance(st, dict) else str(st)) or "",
+            "message": (st.get("message") if isinstance(st, dict) else "") or "",
+            "created_at": j.get("created_at", ""), "url": j.get("url", ""),
+            "flavor": j.get("flavor", ""),
+        }
+    return out, err
+
+
+def _pr_head(repo, number, ttl=120.0):
+    key = (repo, int(number))
+    hit = _pr_head_cache.get(key)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    r = _run(["gh", "pr", "view", str(number), "--repo", repo, "--json", "headRefOid",
+              "-q", ".headRefOid"], timeout=30)
+    sha = r.stdout.strip() if r and r.returncode == 0 else ""
+    if sha:
+        _pr_head_cache[key] = (time.time(), sha)
+    return sha or (hit[1] if hit else "")
+
+
+@app.route("/api/bench")
+def api_bench_list():
+    """Benchmark runs for this PR: recorded recipes joined to live job status."""
+    repo = request.args.get("repo", ""); number = request.args.get("number", 0, type=int)
+    if not _guard(repo, number):
+        return jsonify(error="missing or disallowed repo/number"), 400
+    stages, err = _bench_stages(repo, number)
+    runs, by_recipe = [], {}
+    for m in bench_runner.manifests(repo, number):
+        st = stages.get(m["id"], {})
+        by_recipe.setdefault(m["recipe"], []).append(m["id"])
+        runs.append({
+            "id": m["id"], "name": m.get("name", ""), "recipe": m["recipe"],
+            "flavor": m.get("flavor", ""), "commit": m.get("commit", ""),
+            "submitted_at": m.get("submitted_at", 0),
+            "stage": st.get("stage", "GONE"), "message": st.get("message", ""),
+            "created_at": st.get("created_at", ""), "url": st.get("url", ""),
+        })
+    for r in runs:
+        r["siblings"] = len(by_recipe.get(r["recipe"], []))
+    head = _pr_head(repo, number)
+    return jsonify(runs=runs, pr_head=head, error=err,
+                   flavors=BENCH_FLAVORS,
+                   default_artifacts_repo=(f"{user}/benchmark-pr-hub" if (user := _hf_user()) else ""))
+
+
+@app.route("/api/bench/script")
+def api_bench_script():
+    """Read a candidate benchmark script, and list nearby ones to pick from."""
+    repo = request.args.get("repo", ""); number = request.args.get("number", 0, type=int)
+    if not _guard(repo, number):
+        return jsonify(error="missing or disallowed repo/number"), 400
+    wt = _worktree_for(repo, number, "pr")
+    roots = [wt, Path.home()]
+    out = {"worktree": str(wt), "source": None, "path": None}
+
+    # Candidates: anything benchmark-shaped in the checkout, plus scripts we
+    # have run before — the list is a convenience, the path field is the API.
+    seen, cands = set(), []
+    for pat in ("benchmark*/**/*.py", "benchmarks/*.py", "bench*.py", "scripts/bench*.py"):
+        for f in sorted(wt.glob(pat))[:40]:
+            rel = str(f.relative_to(wt))
+            if rel not in seen and f.is_file():
+                seen.add(rel); cands.append(rel)
+    out["candidates"] = sorted(cands)[:60]
+
+    raw = (request.args.get("path") or "").strip()
+    if raw:
+        p = (wt / raw) if not raw.startswith("/") else Path(raw)
+        try:
+            p = p.resolve()
+        except OSError:
+            return jsonify(error="bad path"), 400
+        if not any(str(p).startswith(str(r.resolve()) + "/") for r in roots):
+            return jsonify(error="path must be inside the worktree or your home directory"), 400
+        if not p.is_file():
+            return jsonify(error=f"no such file: {p}"), 404
+        if p.stat().st_size > 400_000:
+            return jsonify(error="script is larger than 400 kB"), 400
+        try:
+            out["source"] = p.read_text()
+        except (OSError, UnicodeDecodeError) as e:
+            return jsonify(error=f"cannot read: {e}"), 400
+        out["path"] = str(p); out["name"] = p.name
+    return jsonify(out)
+
+
+@app.route("/api/bench/run", methods=["POST"])
+def api_bench_run():
+    """Submit a benchmark to HF Jobs and record its recipe."""
+    body = request.get_json(silent=True) or {}
+    repo = body.get("repo", ""); number = int(body.get("number") or 0)
+    if not _guard(repo, number):
+        return jsonify(error="missing or disallowed repo/number"), 400
+    script = body.get("script") or ""
+    if not script.strip():
+        return jsonify(error="no script: pick a file or paste one"), 400
+    if len(script) > 400_000:
+        return jsonify(error="script is larger than 400 kB"), 400
+    name = (body.get("name") or "bench.py").strip()[:80]
+    flavor = body.get("flavor") or "t4-small"
+    if flavor not in BENCH_FLAVORS:
+        return jsonify(error=f"flavor must be one of {BENCH_FLAVORS}"), 400
+    timeout = str(body.get("timeout") or "45m")
+    if not re.fullmatch(r"\d+(\.\d+)?[smhd]?", timeout):
+        return jsonify(error="timeout like 30m or 2h"), 400
+    deps = [d.strip() for d in (body.get("deps") or []) if d.strip()]
+    for d in deps:
+        if not re.fullmatch(r"[\w.\-]+(\[[\w,\-]+\])?([<>=!~]=?[\w.\*\-]+)?", d):
+            return jsonify(error=f"unsupported dependency spec: {d}"), 400
+    env = {}
+    for k, v in (body.get("env") or {}).items():
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", k or ""):
+            return jsonify(error=f"bad env name: {k}"), 400
+        env[k] = str(v)
+    image = (body.get("image") or "").strip()
+    if image and not re.fullmatch(r"[\w./:\-]+", image):
+        return jsonify(error="bad image"), 400
+    arepo = (body.get("artifacts_repo") or "").strip()
+    if arepo and not re.fullmatch(r"[\w\-.]+/[\w\-.]+", arepo):
+        return jsonify(error="results dataset must look like owner/name"), 400
+
+    commit = (body.get("commit") or "").strip() or _pr_head(repo, number)
+    if commit and not re.fullmatch(r"[0-9a-f]{7,40}", commit):
+        return jsonify(error="bad commit"), 400
+    m, err = bench_runner.submit(repo, number, name=name, script=script, deps=deps,
+                                 flavor=flavor, timeout=timeout, env=env, commit=commit,
+                                 image=image or None, artifacts_repo=arepo, run=_bench_run)
+    if err:
+        return jsonify(error=err), 502
+    _ps_cache["at"] = 0.0
+    return jsonify(ok=True, run={k: m[k] for k in ("id", "name", "recipe", "flavor", "commit")})
+
+
+@app.route("/api/bench/detail")
+def api_bench_detail():
+    """Everything about one run: recipe, live status, parsed results, log."""
+    job = request.args.get("id", "")
+    if not re.fullmatch(r"[0-9a-f]{24}", job or ""):
+        return jsonify(error="bad job id"), 400
+    m = bench_runner.manifest(job)
+    if not m:
+        return jsonify(error="no recorded recipe for this job"), 404
+    stages, _ = _bench_stages(m["repo"], m["number"])
+    st = stages.get(job, {})
+    stage = st.get("stage", "GONE")
+    log, log_error = _job_log(job, stage)
+    parsed = bench_runner.parse_log(log)
+    head = _pr_head(m["repo"], m["number"])
+    siblings = [s["id"] for s in bench_runner.manifests(m["repo"], m["number"])
+                if s["recipe"] == m["recipe"]]
+    return jsonify(
+        run={**{k: v for k, v in m.items() if k != "wrapper"},
+             "stage": stage, "message": st.get("message", ""), "url": st.get("url", ""),
+             "created_at": st.get("created_at", ""), "running": bool(_RUNNING.search(stage)),
+             "pr_head": head, "at_pr_head": bool(head and m.get("commit") == head),
+             "siblings": siblings},
+        meta=parsed["meta"], datasets=parsed["datasets"], facts=parsed["facts"],
+        json_errors=parsed["json_errors"],
+        # A plan printed at runtime wins over one read from the source: it has
+        # the values the run actually resolved.
+        plan=parsed["plan"] or bench_runner.extract_plan(m.get("script", "")),
+        plan_source="runtime" if parsed["plan"] else ("source" if bench_runner.extract_plan(m.get("script", "")) else ""),
+        audit=bench_runner.audit_script(m.get("script", "")),
+        artifacts=bench_runner.artifact_files(job, parsed["artifacts"], m),
+        setup={"script": m.get("script", ""), "wrapper": m.get("wrapper", ""),
+               "command": m.get("command", [])},
+        log=log, log_error=log_error)
+
+
+@app.route("/api/bench/review", methods=["POST"])
+def api_bench_review():
+    """What a script says it will do, and what reading it actually shows.
+
+    Used by the submit form so a badly designed benchmark is caught before it
+    is paid for, and by the Plan tab afterwards. The two halves stay separate:
+    `plan` is the script's own claim, `audit` is evidence from its source.
+    """
+    body = request.get_json(silent=True) or {}
+    src = body.get("script") or ""
+    if len(src) > 400_000:
+        return jsonify(error="script is larger than 400 kB"), 400
+    return jsonify(plan=bench_runner.extract_plan(src), audit=bench_runner.audit_script(src))
+
+
+@app.route("/api/bench/setup")
+def api_bench_setup():
+    """The exact file that was submitted — the one thing a reader must be able to audit."""
+    job = request.args.get("id", "")
+    if not re.fullmatch(r"[0-9a-f]{24}", job or ""):
+        return jsonify(error="bad job id"), 400
+    m = bench_runner.manifest(job)
+    if not m:
+        return jsonify(error="no recorded recipe for this job"), 404
+    return jsonify(script=m.get("script", ""), wrapper=m.get("wrapper", ""),
+                   command=m.get("command", []))
+
+
+@app.route("/api/bench/artifact")
+def api_bench_artifact():
+    """Serve one uploaded file; the results dataset is private, so we proxy it."""
+    job = request.args.get("id", ""); name = request.args.get("file", "")
+    if not re.fullmatch(r"[0-9a-f]{24}", job or ""):
+        return jsonify(error="bad job id"), 400
+    if not name or ".." in name or name.startswith("/"):
+        return jsonify(error="bad file"), 400
+    p = tpool.execute(bench_runner.fetch_artifact, job, name, _bench_run)
+    if not p:
+        return jsonify(error="could not fetch that file from the results dataset"), 502
+    return send_file(str(p), max_age=3600)
+
+
+@app.route("/api/bench/rerun", methods=["POST"])
+def api_bench_rerun():
+    """Re-submit a stored recipe byte for byte — the proof that it reproduces."""
+    job = (request.get_json(silent=True) or {}).get("id", "")
+    if not re.fullmatch(r"[0-9a-f]{24}", job or ""):
+        return jsonify(error="bad job id"), 400
+    m = bench_runner.manifest(job)
+    if not m:
+        return jsonify(error="no recorded recipe for this job"), 404
+    new, err = bench_runner.submit(
+        m["repo"], m["number"], name=m.get("name", "bench.py"), script=m.get("script", ""),
+        deps=m.get("deps", []), flavor=m["flavor"], timeout=m.get("timeout", "45m"),
+        env=m.get("env", {}), commit=m.get("commit", ""), image=m.get("image") or None,
+        artifacts_repo=m.get("artifacts_repo", ""), run=_bench_run)
+    if err:
+        return jsonify(error=err), 502
+    _ps_cache["at"] = 0.0
+    # Same inputs must give the same recipe id; if they don't, say so loudly
+    # rather than quietly showing two runs that look unrelated.
+    return jsonify(ok=True, id=new["id"], recipe=new["recipe"],
+                   same_recipe=new["recipe"] == m["recipe"])
 
 
 # ── Detail viewer ────────────────────────────────────────────────────────────
@@ -1768,7 +2083,21 @@ def opening_message(repo, number, category, brief=None):
         "`codepilot-test --env` shows the PR's venv (an editable install of this checkout) and that it imports this worktree's code. "
         "Rule: before concluding a review, or claiming a change works, run `/test` on the test files this PR touches "
         "(or the closest existing tests) and quote the pass/fail line in your answer; say explicitly if you skipped it."
-        f"For ad-hoc scripts (not the test suite) use `hf jobs uv run script.py --flavor a10g-small "
+        "To benchmark this PR, write a standalone script and hand it to the Tests tab "
+        "(Benchmarks → New benchmark → paste the path): it pins the PR commit, records the "
+        "resolved package versions, re-runs the identical recipe on demand, and charts the results. "
+        "Write it so the UI can review and plot it: "
+        "(1) declare a `BENCH_PLAN = {...}` dict near the top with keys "
+        "`question`, `arms`, `sweeps`, `metrics`, `method` (warmup/reps/timer/seed) and `expect` — "
+        "the UI shows this as the design, and separately audits your source for warmup, repetitions, "
+        "`torch.cuda.synchronize` around timing, a monotonic timer, a seed and an `allclose` between arms, "
+        "so do all of those rather than only claiming them; "
+        "(2) print the results as one JSON object between bare `JSON_BEGIN` and `JSON_END` lines, "
+        "where each value that is a list of flat dicts becomes a chart (one row per swept point, "
+        "parameter columns plus measured columns); "
+        "(3) save any plots with a plain relative `plt.savefig(\"name.png\")` — the run's working "
+        "directory is collected and uploaded. "
+        f"For other ad-hoc scripts use `hf jobs uv run script.py --flavor a10g-small "
         f"--label {_job_label(repo, number)} -d` with `--with git+https://github.com/{repo}@<branch>`. "
         "Flavors: cpu-basic (free-ish), t4-small ($0.40/h), a10g-small ($1/h), a10g-largex2 (2 GPUs, $3/h), "
         "a100-large ($2.50/h), h200 ($5/h). Prefer the smallest that fits. Ask me before anything above a10g-small."
