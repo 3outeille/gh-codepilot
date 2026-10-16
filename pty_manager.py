@@ -12,35 +12,60 @@ import termios
 
 import eventlet
 
-# Active PTY sessions keyed by SocketIO sid
+# Active PTY sessions keyed by "<socket sid>:<slot>" — one browser page can
+# hold several live Claude sessions (tabs) on one socket.
 active_ptys = {}
+
+
+def key_for(sid, slot):
+    return f"{sid}:{slot}"
+
+
+def _split(key):
+    sid, _, slot = key.rpartition(":")
+    return sid, slot
 
 READ_CHUNK = 65536
 
 
 def spawn_claude(sid, socketio, cwd, resume_session_id=None, env_extra=None,
-                 initial_prompt=None):
+                 initial_prompt=None, rows=24, cols=80):
     """
     Spawn Claude Code in a PTY at the given CWD. Optionally resume a session.
 
     env_extra: extra environment for the session (e.g. RELORE_API / RELORE_REPO
     so `relore` works bare inside it).
-    initial_prompt: opening message for a fresh session; ignored on resume.
+    initial_prompt: background for a fresh session, appended to the system
+    prompt (does not start a turn); ignored on resume.
     """
     pid, fd = pty.fork()
 
     if pid == 0:
-        # Child process
+        # Child process. Set the window size before exec so Claude Code's
+        # first render uses the real terminal width instead of the 80x24
+        # default (a mismatch makes Ink's row math garble the output).
+        try:
+            fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        except (OSError, IOError):
+            pass
         os.chdir(str(cwd))
         env = os.environ.copy()
         env["TERM"] = "xterm-256color"
+        # Claude Code's fullscreen renderer takes the alternate screen and
+        # captures the mouse. In xterm.js that kills scrollback and turns wheel
+        # and click events into escape sequences for Claude instead of the
+        # terminal. Keep the classic inline renderer (overridable via env).
+        env.setdefault("CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN", "1")
+        env.setdefault("CLAUDE_CODE_DISABLE_MOUSE", "1")
         env.update(env_extra or {})
 
         cmd = [shutil.which("claude") or "claude"]
         if resume_session_id:
             cmd.extend(["--resume", resume_session_id])
         elif initial_prompt:
-            cmd.append(initial_prompt)
+            # Context only: it rides along as system prompt so Claude knows the
+            # item and the tools, but no turn runs until you type.
+            cmd.extend(["--append-system-prompt", initial_prompt])
 
         os.execvpe(cmd[0], cmd, env)
     else:
@@ -56,9 +81,10 @@ def spawn_claude(sid, socketio, cwd, resume_session_id=None, env_extra=None,
 def _pty_reader(sid, fd, socketio):
     """Background greenlet that reads PTY output and emits to the client.
 
-    Uses non-blocking fd + select (monkey-patched by eventlet) to yield
-    cooperatively instead of occupying a real OS thread from tpool.
+    `sid` here is the composite key; output goes to the socket room with the
+    slot attached so the page can route it to the right tab.
     """
+    room, slot = _split(sid)
     while True:
         try:
             r, _, _ = select.select([fd], [], [], 1.0)
@@ -77,9 +103,9 @@ def _pty_reader(sid, fd, socketio):
             break
         if not data:
             break
-        socketio.emit("pty_output", {"data": data.decode("utf-8", errors="replace")}, to=sid)
+        socketio.emit("pty_output", {"slot": slot, "data": data.decode("utf-8", errors="replace")}, to=room)
 
-    socketio.emit("pty_exit", {}, to=sid)
+    socketio.emit("pty_exit", {"slot": slot}, to=room)
     _cleanup(sid)
 
 
@@ -135,6 +161,12 @@ def kill_pty(sid):
         os.kill(session["pid"], signal.SIGHUP)
     except (OSError, ProcessLookupError):
         _cleanup(sid)
+
+
+def kill_all_for_socket(sid):
+    """Kill every PTY belonging to one socket (page closed / disconnected)."""
+    for key in [k for k in active_ptys if _split(k)[0] == sid]:
+        kill_pty(key)
 
 
 def _cleanup(sid):

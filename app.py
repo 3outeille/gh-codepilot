@@ -1460,8 +1460,8 @@ def api_tests_local():
         repo = request.args.get("repo", ""); number = request.args.get("number", 0, type=int)
         if not _guard(repo, number):
             return jsonify(error="missing or disallowed repo/number"), 400
-        out = {"runs": local_runner.list_runs(repo, number), "env_ready": local_runner.env_ready(repo),
-               "venv": str(local_runner.venv_dir(repo))}
+        out = {"runs": local_runner.list_runs(repo, number), "env_ready": local_runner.env_ready(repo, number),
+               "venv": str(local_runner.venv_dir(repo, number))}
         if request.args.get("env"):
             out["env"] = local_runner.env_info(repo, number)
         return jsonify(out)
@@ -1711,8 +1711,9 @@ def _find_item(repo, number, category):
 
 def opening_message(repo, number, category, brief=None):
     """
-    What Claude sees first: why this item is on your board, then relore's brief.
-    The brief is wrapped in relore's own untrusted-content envelope; we say so.
+    Background appended to Claude's system prompt for a fresh session: why this
+    item is on your board, the tools, then relore's brief. It does not start a
+    turn; the first prompt is yours.
     """
     item = _find_item(repo, number, category)
     kind = "PR" if category == "pr" else "issue"
@@ -1739,7 +1740,7 @@ def opening_message(repo, number, category, brief=None):
         "here in the worktree (CPU, seconds; use it first). `codepilot-test --box <job id> <target>` runs on a warm "
         "GPU box listed in the Jobs tab (seconds). `codepilot-test <target> --flavor t4-small [--timeout 45m]` "
         "submits a one-shot HF Job (minutes of startup); `codepilot-shell` starts a warm box. "
-        "`codepilot-test --env` shows whether the local env is ready and that it imports this worktree's code. "
+        "`codepilot-test --env` shows the PR's venv (an editable install of this checkout) and that it imports this worktree's code. "
         "Rule: before concluding a review, or claiming a change works, run `/test` on the test files this PR touches "
         "(or the closest existing tests) and quote the pass/fail line in your answer; say explicitly if you skipped it."
         f"For ad-hoc scripts (not the test suite) use `hf jobs uv run script.py --flavor a10g-small "
@@ -1751,7 +1752,7 @@ def opening_message(repo, number, category, brief=None):
         brief = relore_brief(repo, number)
     if brief:
         lines += ["", "Here is `relore brief` for this item:", "", brief]
-    lines += ["", "Start by summarising the state of this item and what you'd suggest I do next."]
+    # No closing instruction: this is background, the first turn is the user's.
     return "\n".join(lines)
 
 
@@ -1789,7 +1790,7 @@ def handle_start_terminal(data):
     prompt = None
     if not resume_id:
         emit("terminal_status", {"slot": slot, "message": "Gathering project history (relore)..."})
-        prompt = opening_message(repo, number, category, brief=brief_job.wait() or "")
+        prompt = opening_message(repo, number, category, brief=brief_job.wait() or "")[:60000]
 
     emit("terminal_status", {"slot": slot, "message": "Starting Claude Code..."})
 
