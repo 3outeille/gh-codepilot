@@ -1734,6 +1734,35 @@ def _pr_head(repo, number, ttl=120.0):
     return sha or (hit[1] if hit else "")
 
 
+# Jobs the Bench tab should claim: anything carrying this PR's label that is
+# not a pytest run or an interactive box. A benchmark launched by hand or by
+# Claude with `hf jobs uv run` has no kind label at all, and used to be
+# invisible here purely because the UI only listed what it had submitted
+# itself.
+_NOT_BENCH = {"tests", "shell", "fetch"}
+
+
+def _is_bench_job(labels):
+    return labels.get("gh-codepilot-kind") not in _NOT_BENCH
+
+
+def _bench_name(command):
+    """A readable name for an unrecorded run: the script it executed."""
+    for tok in (command or "").split():
+        if tok.endswith(".py"):
+            return tok.rsplit("/", 1)[-1]
+    return (command or "job").split()[:3] and " ".join((command or "job").split()[:3])[:40] or "job"
+
+
+def _repo_from_label(value):
+    """`owner--repo--123` back into ("owner/repo", 123)."""
+    head, _, num = (value or "").rpartition("--")
+    if not num.isdigit() or "--" not in head:
+        return "", 0
+    owner, _, name = head.partition("--")
+    return f"{owner}/{name}", int(num)
+
+
 @app.route("/api/bench")
 def api_bench_list():
     """Benchmark runs for this PR: recorded recipes joined to live job status."""
@@ -1741,19 +1770,44 @@ def api_bench_list():
     if not _guard(repo, number):
         return jsonify(error="missing or disallowed repo/number"), 400
     stages, err = _bench_stages(repo, number)
-    runs, by_recipe = [], {}
+    runs, by_recipe, seen = [], {}, set()
     for m in bench_runner.manifests(repo, number):
         st = stages.get(m["id"], {})
         by_recipe.setdefault(m["recipe"], []).append(m["id"])
+        seen.add(m["id"])
         runs.append({
             "id": m["id"], "name": m.get("name", ""), "recipe": m["recipe"],
             "flavor": m.get("flavor", ""), "commit": m.get("commit", ""),
-            "submitted_at": m.get("submitted_at", 0),
+            "submitted_at": m.get("submitted_at", 0), "recorded": True,
             "stage": st.get("stage", "GONE"), "message": st.get("message", ""),
             "created_at": st.get("created_at", ""), "url": st.get("url", ""),
         })
+
+    # Benchmarks that were launched outside this UI. There is no recipe to show
+    # and nothing to re-run exactly, but the status, the log and whatever the
+    # run printed are all still readable.
+    jobs, _ = _hf_jobs_ps()
+    want = _job_label(repo, number).split("=", 1)
+    for j in jobs:
+        labels = j.get("labels") or {}
+        if labels.get(want[0]) != want[1] or not _is_bench_job(labels):
+            continue
+        if j.get("id") in seen:
+            continue
+        st = j.get("status") or {}
+        cmd = " ".join(j.get("command") or [])
+        runs.append({
+            "id": j.get("id"), "name": _bench_name(cmd), "recipe": "",
+            "flavor": j.get("flavor", ""), "commit": "", "recorded": False,
+            "submitted_at": 0, "command": cmd[:200],
+            "stage": (st.get("stage") if isinstance(st, dict) else str(st)) or "",
+            "message": (st.get("message") if isinstance(st, dict) else "") or "",
+            "created_at": j.get("created_at", ""), "url": j.get("url", ""),
+        })
+
+    runs.sort(key=lambda r: r.get("created_at") or "", reverse=True)
     for r in runs:
-        r["siblings"] = len(by_recipe.get(r["recipe"], []))
+        r["siblings"] = len(by_recipe.get(r["recipe"], [])) if r["recipe"] else 0
     head = _pr_head(repo, number)
     return jsonify(runs=runs, pr_head=head, error=err,
                    flavors=BENCH_FLAVORS,
@@ -1856,7 +1910,24 @@ def api_bench_detail():
         return jsonify(error="bad job id"), 400
     m = bench_runner.manifest(job)
     if not m:
-        return jsonify(error="no recorded recipe for this job"), 404
+        # Launched outside this UI, so there is no recipe. Everything the run
+        # itself produced is still here; only the "how was it built" half is
+        # missing, and the UI says so rather than refusing to open it.
+        jobs, _ = _hf_jobs_ps()
+        j = next((x for x in jobs if x.get("id") == job), None)
+        if not j:
+            return jsonify(error="that job is not listed on the Hub any more"), 404
+        labels = j.get("labels") or {}
+        repo, number = _repo_from_label(labels.get("gh-codepilot", ""))
+        if not repo:
+            return jsonify(error="that job is not tied to a PR on this board"), 404
+        cmd = " ".join(j.get("command") or [])
+        m = {"id": job, "repo": repo, "number": number, "name": _bench_name(cmd),
+             "recipe": "", "flavor": j.get("flavor", ""), "commit": "", "deps": [],
+             "image": "", "env": {}, "artifacts_repo": "", "artifacts_path": "",
+             "timeout": "", "script": "", "wrapper": "", "command": j.get("command") or [],
+             "recorded": False}
+    m.setdefault("recorded", True)
     stages, _ = _bench_stages(m["repo"], m["number"])
     st = stages.get(job, {})
     stage = st.get("stage", "GONE")
@@ -1864,7 +1935,7 @@ def api_bench_detail():
     parsed = bench_runner.parse_log(log)
     head = _pr_head(m["repo"], m["number"])
     siblings = [s["id"] for s in bench_runner.manifests(m["repo"], m["number"])
-                if s["recipe"] == m["recipe"]]
+                if m["recipe"] and s["recipe"] == m["recipe"]]
     return jsonify(
         run={**{k: v for k, v in m.items() if k != "wrapper"},
              "stage": stage, "message": st.get("message", ""), "url": st.get("url", ""),
@@ -1877,7 +1948,7 @@ def api_bench_detail():
         # the values the run actually resolved.
         plan=parsed["plan"] or bench_runner.extract_plan(m.get("script", "")),
         plan_source="runtime" if parsed["plan"] else ("source" if bench_runner.extract_plan(m.get("script", "")) else ""),
-        audit=bench_runner.audit_script(m.get("script", "")),
+        audit=bench_runner.audit_script(m["script"]) if m.get("script") else None,
         artifacts=bench_runner.artifact_files(job, parsed["artifacts"], m),
         setup={"script": m.get("script", ""), "wrapper": m.get("wrapper", ""),
                "command": m.get("command", [])},

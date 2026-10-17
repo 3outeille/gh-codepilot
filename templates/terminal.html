@@ -92,6 +92,7 @@
 
     /* The recipe chip is the reproducibility handle: same chip = same experiment. */
     .t-chip { font-family: Menlo, Consolas, monospace; font-size: 9.5px; background: #1c2333; color: #79c0ff; border: 1px solid #1f3b5c; border-radius: 3px; padding: 0 4px; flex-shrink: 0; }
+    .t-chip.plain { background: #21262d; color: #6e7681; border-color: #30363d; }
 
     /* Detail header */
     .t-head { padding: 12px 16px 0; }
@@ -160,6 +161,15 @@
     .t-ctrl select, .t-ctrl input { background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 5px; padding: 3px 6px; font-size: 11px; }
     .t-ctrl .seg button { background: #0d1117; color: #8b949e; border: none; padding: 3px 9px; font-size: 10.5px; cursor: pointer; }
     .t-ctrl .seg button.on { background: #21262d; color: #e6edf3; }
+
+    /* Stat tiles: a single result reads as a number, not a one-bar chart. */
+    .t-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .t-tile { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 8px 11px 9px; }
+    .t-tile .k { font-size: 10px; color: #6e7681; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .t-tile .v { font-size: 19px; color: #e6edf3; line-height: 1.1; }
+    .t-tile.good { border-color: #238636; } .t-tile.good .v { color: #3fb950; }
+    .t-tile.bad { border-color: #da3633; } .t-tile.bad .v { color: #f85149; }
+    .t-legend .sw.box { width: 11px; height: 11px; border-radius: 3px; }
 
     .t-tip { position: fixed; z-index: 60; pointer-events: none; background: #1c2128; border: 1px solid #30363d; border-radius: 6px; padding: 6px 9px; font-size: 10.5px; color: #c9d1d9; box-shadow: 0 6px 20px rgba(0,0,0,.5); max-width: 280px; }
     .t-tip .hd { color: #e6edf3; font-weight: 600; margin-bottom: 3px; }
@@ -1145,7 +1155,9 @@
                data-key="bench:${r.id}" onclick="selectBench('bench:${r.id}')">
             <span class="dot"></span>
             <div><div class="ttl">${escapeHtml(r.name)}</div>
-              <div class="sub"><span class="t-chip">${r.recipe}</span>${escapeHtml(r.flavor)}
+              <div class="sub">${r.recipe
+                  ? `<span class="t-chip">${r.recipe}</span>`
+                  : `<span class="t-chip plain" title="Launched outside this tab, so no recipe was recorded">ext</span>`}${escapeHtml(r.flavor)}
                 ${r.siblings > 1 ? `<span title="runs sharing this recipe">×${r.siblings}</span>` : ''}
                 ${r.created_at ? '· ' + timeAgo(r.created_at) : ''}</div></div>
           </div>`).join('') || `<div class="t-empty">None yet — a benchmark here keeps its script, deps, hardware and commit so it can be re-run exactly.</div>`}
@@ -1159,7 +1171,7 @@
       markSelected('bench-rail', key);
       renderBenchDetail();
     }
-    function setTab(t) { T.tab = t; saveT(); renderBenchDetail(); }
+    function setTab(t) { T.tab = t; T.tabPinned = true; saveT(); renderBenchDetail(); }
 
     function renderBenchDetail() {
       const host = document.getElementById('bench-detail'); if (!host) return;
@@ -1196,6 +1208,7 @@
 
     function paintBenchRun(host, d, id) {
       const r = d.run, stage = r.stage || '';
+      if (r.recorded === false && !T.tabPinned && T.tab === 'setup') T.tab = 'plots';
       const st = /COMPLETED/i.test(stage) ? 'ok' : /ERROR|FAILED/i.test(stage) ? 'bad'
                : RUNNING.test(stage) ? 'run' : 'idle';
       const nPlots = (d.datasets || []).length + (d.artifacts?.files || []).filter(f => f.image).length;
@@ -1209,9 +1222,9 @@
           </div>
           ${reproClaims(d)}
           <div class="t-acts">
-            <button class="go" onclick="rerun(this,'${id}')" title="Submit this exact recipe again">⟳ Re-run exactly</button>
+            ${r.recorded === false ? '' : `<button class="go" onclick="rerun(this,'${id}')" title="Submit this exact recipe again">⟳ Re-run exactly</button>`}
             ${r.running ? `<button onclick="cancelJob(this,'${id}')">Cancel</button>` : ''}
-            <button onclick="forkBench('${id}')" title="Load this script into the form to change something">Edit &amp; run variant</button>
+            ${r.recorded === false ? '' : `<button onclick="forkBench('${id}')" title="Load this script into the form to change something">Edit &amp; run variant</button>`}
             <button onclick="refreshBench('${id}')" title="Re-read status and log from the Hub">↻</button>
             ${r.url ? `<a href="${r.url}" target="_blank" rel="noopener">Job on the Hub ↗</a>` : ''}
             ${d.artifacts?.hub_url && d.artifacts?.uploaded ? `<a href="${d.artifacts.hub_url}" target="_blank" rel="noopener">Results dataset ↗</a>` : ''}
@@ -1244,15 +1257,19 @@
       const pkgs = Object.keys(m.packages || {}).length;
       const gpu = m.gpu || {};
       const c = [];
-      c.push(`<span class="t-claim ok" title="Hash of script + dependencies + hardware + commit + env. Same chip, same experiment.">recipe <b class="t-mono">${r.recipe}</b></span>`);
-      c.push(sib > 1
-        ? `<span class="t-claim ok" title="Other runs submitted from this identical recipe">ran <b>${sib}×</b> identically</span>`
-        : `<span class="t-claim" title="Re-run it to confirm the numbers repeat">ran <b>once</b></span>`);
-      c.push(r.commit
-        ? (r.at_pr_head
-            ? `<span class="t-claim ok" title="${escapeHtml(r.commit)}">commit <b class="t-mono">${r.commit.slice(0, 7)}</b> = PR head</span>`
-            : `<span class="t-claim warn" title="PR head is now ${escapeHtml(r.pr_head || 'unknown')} — this ran against older code">commit <b class="t-mono">${r.commit.slice(0, 7)}</b> behind PR head</span>`)
-        : `<span class="t-claim warn">no commit pinned</span>`);
+      if (r.recorded === false) {
+        c.push(`<span class="t-claim warn" title="Started with hf jobs rather than from this tab, so the script, dependencies and commit were never captured">no recipe recorded</span>`);
+      } else {
+        c.push(`<span class="t-claim ok" title="Hash of script + dependencies + hardware + commit + env. Same chip, same experiment.">recipe <b class="t-mono">${r.recipe}</b></span>`);
+        c.push(sib > 1
+          ? `<span class="t-claim ok" title="Other runs submitted from this identical recipe">ran <b>${sib}×</b> identically</span>`
+          : `<span class="t-claim" title="Re-run it to confirm the numbers repeat">ran <b>once</b></span>`);
+        c.push(r.commit
+          ? (r.at_pr_head
+              ? `<span class="t-claim ok" title="${escapeHtml(r.commit)}">commit <b class="t-mono">${r.commit.slice(0, 7)}</b> = PR head</span>`
+              : `<span class="t-claim warn" title="PR head is now ${escapeHtml(r.pr_head || 'unknown')} — this ran against older code">commit <b class="t-mono">${r.commit.slice(0, 7)}</b> behind PR head</span>`)
+          : `<span class="t-claim warn">no commit pinned</span>`);
+      }
       if (pkgs) c.push(`<span class="t-claim ok link" title="Exact versions resolved inside the job" onclick="setTab('setup')"><b>${pkgs}</b> package versions recorded</span>`);
       if (gpu.device) c.push(`<span class="t-claim ok">${escapeHtml(gpu.device)}${gpu.count > 1 ? ' ×' + gpu.count : ''}${gpu.torch ? ' · torch ' + escapeHtml(gpu.torch) : ''}</span>`);
       else if (m.python) c.push(`<span class="t-claim">python ${escapeHtml(m.python)}</span>`);
@@ -1297,6 +1314,24 @@
       const r = d.run, m = d.meta || {}, s = d.setup || {};
       const cmd = (s.command || []).map(a => /[\s"']/.test(a) ? `'${a}'` : a).join(' ');
       const pkgs = m.packages || {};
+      if (r.recorded === false) {
+        pane.innerHTML = `<section class="t-block">
+            <header><h4>No recipe for this run</h4><span class="t-muted">started outside this tab</span></header>
+            <div class="t-empty" style="padding:4px 0">
+              This job was launched with <code>hf jobs</code> directly, so its script, dependencies and
+              commit were never captured. Its results, log and hardware are all below and under Plots —
+              what is missing is the half that would let you re-run it exactly or audit how it was built.
+              <p style="margin-top:8px">Launch the next one from <b>+ New benchmark</b> and it gets a recipe,
+              a design review, and a working <b>Re-run exactly</b>.</p>
+            </div></section>`
+          + whereHTML(r, m)
+          + `<h4 style="margin:2px 2px 6px">Submitted command</h4>
+             ${copyBtn('cmd', cmd || r.command || '')}
+             <div class="t-code" style="margin-bottom:16px">${escapeHtml(cmd || r.command || '(not recorded)')}</div>
+             ${Object.keys(pkgs).length ? `<h4 style="margin:2px 2px 6px">Resolved packages <span class="t-count">${Object.keys(pkgs).length}</span></h4>
+               <div class="t-pkgs">${Object.keys(pkgs).sort().map(k => `${escapeHtml(k)}==${escapeHtml(pkgs[k])}`).join('<br>')}</div>` : ''}`;
+        return;
+      }
       pane.innerHTML =
         declaredHTML(d.plan, d.plan_source) + auditHTML(d.audit) + whereHTML(r, m) + `
         <h4 style="margin:2px 2px 6px">Submitted command</h4>
@@ -1524,9 +1559,20 @@
       });
       const consts = info.filter(c => c.n <= 1);
       const vary = info.filter(c => c.n > 1);
-      const cap = Math.max(2, Math.floor(rows.length / 2));
-      const dims = vary.filter(c => c.n <= cap && (c.n <= 12 || !c.numeric));
-      const measures = vary.filter(c => c.numeric && !dims.includes(c));
+      // A dimension is a knob that *repeats* across rows. A numeric column with
+      // one distinct value per row is a measurement, not an axis — which is the
+      // whole difference between a sweep and a two-arm A/B. Judging by
+      // "distinct <= rows/2" made every column of a 2-row comparison look like
+      // an axis, left no measures, and silently fell back to a table.
+      let dims = vary.filter(c => !c.numeric || (c.n <= 12 && c.n < rows.length));
+      let measures = vary.filter(c => c.numeric && !dims.includes(c));
+      if (!dims.length && measures.length > 1) {
+        // A sweep with exactly one row per parameter value: nothing repeats, so
+        // fall back to the old shape test to find something to put on x.
+        const cap = Math.max(2, Math.floor(rows.length / 2));
+        dims = vary.filter(c => c.n <= cap);
+        measures = vary.filter(c => c.numeric && !dims.includes(c));
+      }
       return { info, consts, dims, measures };
     }
 
@@ -1562,11 +1608,22 @@
       dsHosts[key] = { host, ds };
       const rows = ds.rows, a = analyze(rows), s = getSpec(key, a);
 
+      // One row of scalars is a readout, not a plot.
+      if (rows.length === 1) {
+        host.innerHTML = `<h4 style="margin:2px 2px 6px">${escapeHtml(ds.name)}
+            <span class="t-muted t-h4note">single result</span></h4>${tilesHTML(rows[0])}`;
+        return;
+      }
       if (!a.measures.length || !s.x) {                 // nothing to plot: the table is the chart
         host.innerHTML = `<h4 style="margin:2px 2px 6px">${escapeHtml(ds.name)} <span class="t-count">${rows.length} rows</span></h4>
           <div class="t-table-wrap">${tableHTML(rows)}</div>`;
         return;
       }
+
+      // A nominal x (arm, variant, model) is a bar chart: the axis has no
+      // order, so joining the points with a line would invent one.
+      const xcol = a.dims.find(dd => dd.name === s.x);
+      if (xcol && !xcol.numeric) return renderArms(host, ds, rows, a, s, key);
 
       const others = a.dims.filter(d => d.name !== s.x);
       const kept = rows.filter(r => others.every(d => !s.filter[d.name] || String(r[d.name]) === s.filter[d.name]));
@@ -1612,6 +1669,32 @@
             : `<div class="t-empty">Every series is hidden — click one in the legend.</div>`}`}`;
     }
 
+    function renderArms(host, ds, rows, a, s, key) {
+      const arms = [...new Set(rows.map(r => r[s.x]))];
+      const armColor = k => SERIES[Math.max(0, arms.indexOf(k)) % SERIES.length];
+      const shown = a.measures.filter(m => !s.hide.includes(m.name));
+      const others = a.dims.filter(d => d.name !== s.x);
+      host.innerHTML = `
+        <h4 style="margin:2px 2px 6px">${escapeHtml(ds.name)} <span class="t-count">${arms.length} arms</span>
+          ${a.consts.length ? `<span class="t-muted t-h4note">${a.consts.map(c => `${escapeHtml(c.name)} ${escapeHtml(String(c.values[0]))}`).join(' · ')}</span>` : ''}</h4>
+        <div class="t-ctrl">
+          <span>compare by</span><select onchange="setSpec('${key}',{x:this.value})">
+            ${a.dims.map(d => `<option value="${escapeHtml(d.name)}" ${d.name === s.x ? 'selected' : ''}>${escapeHtml(d.name)}</option>`).join('')}</select>
+          ${others.length ? `<span class="t-muted">${others.length} other dimension${others.length > 1 ? 's' : ''} collapsed — pick one above to compare by it instead</span>` : ''}
+          <div class="seg">
+            <button class="${!s.table ? 'on' : ''}" onclick="setSpec('${key}',{table:false})">chart</button>
+            <button class="${s.table ? 'on' : ''}" onclick="setSpec('${key}',{table:true})">table</button>
+          </div>
+        </div>
+        ${s.table ? `<div class="t-table-wrap">${tableHTML(rows)}</div>` : `
+          <div class="t-legend">${a.measures.map(m => `
+            <label class="${s.hide.includes(m.name) ? 'off' : ''}" onclick="toggleSeries('${key}','${escapeHtml(m.name).replace(/'/g, '&#39;')}')">
+              <span class="sw box" style="background:${s.hide.includes(m.name) ? '#30363d' : '#8b949e'}"></span>${escapeHtml(m.name)}</label>`).join('')}</div>
+          ${shown.length ? `<div class="t-figs">${shown.map((m, i) =>
+            barFig(rows, s.x, m.name, armColor, `${key}|b${i}`)).join('')}</div>`
+            : `<div class="t-empty">Every measure is hidden — click one above.</div>`}`}`;
+    }
+
     function setFilter(key, dim, val) {
       const f = { ...T.specs[key].filter }; if (val) f[dim] = val; else delete f[dim];
       setSpec(key, { filter: f });
@@ -1619,6 +1702,58 @@
     function toggleSeries(key, name) {
       const h = T.specs[key].hide || [];
       setSpec(key, { hide: h.includes(name) ? h.filter(x => x !== name) : [...h, name] });
+    }
+
+    // ── Forms other than a line chart ──────────────────────────────────────
+    // A sweep is a line chart. The two other shapes a benchmark actually
+    // produces are an A/B over named arms, which is a bar chart because the
+    // axis is nominal, and a single row of scalars, which is not a chart at
+    // all — a one-bar bar chart is a stat tile with extra ink.
+
+    const BAR = { W: 360, L: 104, R: 56, T: 6, ROW: 26, H: 15 };
+
+    function barFig(rows, xcol, measure, colorOf, cid) {
+      const pts = rows.map(r => ({ k: r[xcol], v: r[measure] }))
+                      .filter(p => typeof p.v === 'number' && isFinite(p.v));
+      if (!pts.length) return '';
+      const max = Math.max(...pts.map(p => p.v), 0);
+      const min = Math.min(...pts.map(p => p.v), 0);
+      const span = (max - min) || 1;
+      const h = BAR.T * 2 + pts.length * BAR.ROW + 16;
+      const plotW = BAR.W - BAR.L - BAR.R;
+      const zero = BAR.L + (0 - min) / span * plotW;
+      // Best and worst get a quiet marker: for a timing that is the point of
+      // the chart, and it survives when colour does not.
+      const best = Math.min(...pts.map(p => p.v)), worst = Math.max(...pts.map(p => p.v));
+      let svg = `<line class="t-axis" x1="${zero.toFixed(1)}" y1="${BAR.T}" x2="${zero.toFixed(1)}" y2="${(BAR.T + pts.length * BAR.ROW).toFixed(1)}"/>`;
+      pts.forEach((p, i) => {
+        const y = BAR.T + i * BAR.ROW + (BAR.ROW - BAR.H) / 2;
+        const x = BAR.L + (Math.min(p.v, 0) - min) / span * plotW;
+        const w = Math.max(1, Math.abs(p.v) / span * plotW);
+        svg += `<text class="t-tick" x="${BAR.L - 8}" y="${(y + BAR.H / 2 + 3).toFixed(1)}" text-anchor="end">${escapeHtml(String(p.k)).slice(0, 18)}</text>`
+             + `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${BAR.H}" rx="3" fill="${colorOf(p.k)}"/>`
+             + `<text class="t-dlab" x="${(x + w + 6).toFixed(1)}" y="${(y + BAR.H / 2 + 3).toFixed(1)}">${escapeHtml(fmtNum(p.v))}${
+                 p.v === best && best !== worst ? ' ▾' : ''}</text>`;
+      });
+      const ratio = (best > 0 && worst > 0 && best !== worst) ? (worst / best) : 0;
+      return `<div class="t-fig"><h6>${escapeHtml(measure)}</h6>
+        <div class="cap">${pts.length} arms${ratio ? ` · ${fmtNum(ratio)}× between best and worst` : ''}</div>
+        <svg viewBox="0 0 ${BAR.W} ${h}" role="img" aria-label="${escapeHtml(measure)} by ${escapeHtml(xcol)}">${svg}</svg></div>`;
+    }
+
+    // One row of scalars: the number *is* the chart.
+    function tilesHTML(row) {
+      const keys = Object.keys(row);
+      return `<div class="t-tiles">${keys.map(k => {
+        // Deliberately no good/bad colouring. `arms_allclose: true` is a pass
+        // and `premul_all_zero: false` is also a pass — the polarity lives in
+        // the field name, which this code cannot read. The glyph carries
+        // true/false; calling one of them red would be inventing a verdict.
+        const v = row[k];
+        const shown = typeof v === 'boolean' ? (v ? '✓ true' : '✗ false') : fmtNum(v);
+        return `<div class="t-tile"><div class="k">${escapeHtml(k)}</div>
+          <div class="v">${escapeHtml(String(shown))}</div></div>`;
+      }).join('')}</div>`;
     }
 
     // ── One figure ─────────────────────────────────────────────────────────
