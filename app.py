@@ -1304,33 +1304,66 @@ def _job_label(repo, number):
     return f"gh-codepilot={repo.replace('/', '--')}--{number}"
 
 
+def _pytest_target(command):
+    """The pytest target out of a submitted job's command.
+
+    The `gh-codepilot-target` label cannot hold it: Hub label values are
+    restricted to [A-Za-z0-9_-], so both the path separators and the spaces
+    between several targets collapse to underscores and cannot be told apart
+    again. The command still has it verbatim, so read it from there.
+    """
+    m = re.search(r"python -m pytest\s+(.*?)\s*$", command, re.M)
+    if not m:
+        return ""
+    # Skipping flags and their values does not work: a `-k a or b or c`
+    # expression is unquoted once the argv is joined, so its bare words look
+    # exactly like positional arguments. Match what a target *is* instead — a
+    # path or a node id — which no -k operand ever resembles.
+    return " ".join(a for a in m.group(1).split()
+                    if not a.startswith("-") and ("/" in a or a.endswith(".py") or "::" in a))
+
+
+def _pytest_filter(command):
+    """The `-k` expression a job ran with, if any — it decides what was skipped."""
+    m = re.search(r"python -m pytest\s+(.*?)\s*$", command, re.M)
+    if not m:
+        return ""
+    args = m.group(1).split()
+    if "-k" not in args:
+        return ""
+    out = []
+    for a in args[args.index("-k") + 1:]:
+        if a.startswith("-") or "/" in a or a.endswith(".py") or "::" in a:
+            break
+        out.append(a)
+    return " ".join(out)
+
+
 @app.route("/api/jobs")
 def api_jobs():
     repo = request.args.get("repo", ""); number = request.args.get("number", 0, type=int)
     if not _guard(repo, number):
         return jsonify(error="missing or disallowed repo/number"), 400
-    r = _run(["hf", "jobs", "ps", "-a", "--format", "json"], timeout=40)
-    if r is None or r.returncode != 0:
-        return jsonify(error=(r.stderr if r else "hf jobs timed out").strip()[:300] or "hf jobs failed"), 502
-    try:
-        jobs = json.loads(r.stdout or "[]")
-    except json.JSONDecodeError:
-        return jsonify(error="unexpected hf jobs output"), 502
+    jobs, err = _hf_jobs_ps()
+    if err and not jobs:
+        return jsonify(error=err), 502
     want = _job_label(repo, number).split("=", 1)
     mine = []
     for j in jobs:
         labels = j.get("labels") or {}
         if labels.get(want[0]) == want[1]:
             st = j.get("status") or {}
+            full = " ".join(j.get("command") or [])
             mine.append({
                 "id": j.get("id"), "stage": st.get("stage") if isinstance(st, dict) else str(st),
                 "message": (st.get("message") if isinstance(st, dict) else "") or "",
                 "created_at": j.get("created_at", ""), "flavor": j.get("flavor", ""),
-                "command": " ".join(j.get("command") or [])[:160], "url": j.get("url", ""),
+                "command": full[:160], "url": j.get("url", ""),
+                "target": _pytest_target(full), "kexpr": _pytest_filter(full),
                 "labels": labels,
             })
     mine.sort(key=lambda j: j["created_at"], reverse=True)
-    return jsonify(jobs=mine, label=_job_label(repo, number))
+    return jsonify(jobs=mine, label=_job_label(repo, number), error=err)
 
 
 TEST_IMAGE = "huggingface/transformers-all-latest-gpu"

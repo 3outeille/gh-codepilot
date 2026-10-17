@@ -1006,7 +1006,7 @@
     const RUNNING = /RUNNING|PENDING|STARTING|SCHEDULING|UPDATING/i;
     const BENCH_TABS = ['setup', 'plots', 'metrics', 'log'];
 
-    let boxes = [], benchRuns = [], testRuns = [], benchMeta = {}, envInfo = null;
+    let boxes = [], benchRuns = [], testRuns = [], jobTests = [], benchMeta = {}, envInfo = null;
     const runLogs = {};        // local/box run id -> {offset, text}
     const detailCache = {};    // bench job id -> last /api/bench/detail payload
 
@@ -1014,7 +1014,8 @@
       body: JSON.stringify({ repo: REPO, number: NUMBER, ...body }) }).then(r => r.json()).catch(() => ({ error: 'request failed' }));
 
     const liveCount = () => benchRuns.filter(r => RUNNING.test(r.stage)).length
-                          + testRuns.filter(r => r.status === 'running').length;
+                          + testRuns.filter(r => r.status === 'running').length
+                          + jobTests.filter(r => RUNNING.test(r.stage)).length;
     const stageClass = s => /COMPLETED|passed/i.test(s) ? 'pass' : /ERROR|FAILED|failed/i.test(s) ? 'fail'
                           : RUNNING.test(s) || s === 'running' ? 'run' : '';
 
@@ -1050,25 +1051,41 @@
 
     async function renderTestsRail() {
       const host = document.getElementById('tests-rail'); if (!host) return;
-      const [t, w] = await Promise.all([
+      // Three sources, one list. A run submitted as a one-shot HF Job is still
+      // a test run of this PR — it was invisible here until it was asked for.
+      const [t, w, j] = await Promise.all([
         api('/api/tests/local').catch(() => ({ error: 'request failed' })),
         fetch('/api/jobs/warm').then(r => r.json()).catch(() => ({ error: 'request failed' })),
+        api('/api/jobs').catch(() => ({ error: 'request failed' })),
       ]);
       testRuns = t.runs || []; boxes = w.boxes || [];
+      jobTests = (j.jobs || []).filter(x => (x.labels || {})['gh-codepilot-kind'] === 'tests');
       benchMeta.sshReady = !!w.ssh_ready;
       const n = document.getElementById('tests-n');
-      if (n) n.textContent = testRuns.filter(r => r.status === 'running').length || '';
+      if (n) n.textContent = (testRuns.filter(r => r.status === 'running').length
+                            + jobTests.filter(r => RUNNING.test(r.stage)).length) || '';
       const dur = r => r.ended ? Math.round(r.ended - r.started) + 's'
                      : r.started ? timeAgo(new Date(r.started * 1000).toISOString()) + ' ago' : '';
+      // Interleave by start time so the newest run is on top whatever ran it.
+      const rows = [
+        ...testRuns.map(r => ({ at: (r.started || 0) * 1000, key: 'test:' + r.id,
+          cls: stageClass(r.status),
+          title: runLabel(r.target),
+          sub: `${r.box ? 'box ' + r.box.slice(-6) : 'local'} · ${dur(r)}` })),
+        ...jobTests.map(r => ({ at: Date.parse(r.created_at || '') || 0, key: 'jobtest:' + r.id,
+          cls: stageClass(r.stage),
+          title: runLabel(jobTestTarget(r)),
+          sub: `${r.flavor} · ${r.created_at ? timeAgo(r.created_at) + ' ago' : ''}` })),
+      ].sort((a, b) => b.at - a.at);
       host.innerHTML = `
         <button class="t-new" onclick="selectTest('new-test')">+ Run tests</button>
-        <h5>Runs <span class="n">${testRuns.length}</span></h5>
-        ${testRuns.map(r => `
-          <div class="t-item ${stageClass(r.status)} ${T.selTest === 'test:' + r.id ? 'on' : ''}"
-               data-key="test:${r.id}" onclick="selectTest('test:${r.id}')">
+        <h5>Runs <span class="n">${rows.length}</span></h5>
+        ${rows.map(r => `
+          <div class="t-item ${r.cls} ${T.selTest === r.key ? 'on' : ''}"
+               data-key="${r.key}" onclick="selectTest('${r.key}')">
             <span class="dot"></span>
-            <div><div class="ttl">${escapeHtml((r.target || '').split(' ')[0].split('/').pop() || r.target)}</div>
-              <div class="sub">${r.box ? 'box ' + escapeHtml(r.box.slice(-6)) : 'local'} · ${dur(r)}</div></div>
+            <div><div class="ttl">${escapeHtml(r.title)}</div>
+              <div class="sub">${escapeHtml(r.sub)}</div></div>
           </div>`).join('') || `<div class="t-empty">No runs yet. Local runs happen in this PR's own worktree and take seconds.</div>`}
         <h5>Boxes <span class="n">${boxes.length}</span><button onclick="selectTest('new-box')">start</button></h5>
         ${boxes.map(bx => `
@@ -1078,7 +1095,7 @@
             <div><div class="ttl">${escapeHtml(bx.flavor)}</div>
               <div class="sub"><span class="t-chip">${bx.id.slice(-6)}</span>up ${timeAgo(bx.created_at)}</div></div>
           </div>`).join('') || `<div class="t-empty">No warm box running.</div>`}
-        ${t.error || w.error ? `<div class="t-empty" style="color:#f85149">${escapeHtml(t.error || w.error)}</div>` : ''}`;
+        ${t.error || w.error || j.error ? `<div class="t-empty" style="color:#f85149">${escapeHtml(t.error || w.error || j.error)}</div>` : ''}`;
     }
 
     function selectTest(key) {
@@ -1093,6 +1110,7 @@
       if (kind === 'new-test') return renderTestForm(host);
       if (kind === 'new-box') return renderBoxForm(host);
       if (kind === 'test') return renderTestRun(host, id);
+      if (kind === 'jobtest') return renderJobTestRun(host, id);
       if (kind === 'box') return renderBox(host, id);
       host.innerHTML = `<div class="t-pane"><div class="t-empty">Pick a run on the left.</div></div>`;
     }
@@ -1937,7 +1955,7 @@ Anything saved to a relative path (plt.savefig('speedup.png')) is collected and 
       const st = r.status === 'passed' ? 'ok' : r.status === 'failed' ? 'bad' : r.status === 'running' ? 'run' : 'idle';
       host.innerHTML = `
         <div class="t-head">
-          <h3>${escapeHtml((r.target || '').split(' ')[0].split('/').pop())} <span class="t-stage ${st}">${escapeHtml(r.status)}</span></h3>
+          <h3>${escapeHtml(runLabel(r.target))} <span class="t-stage ${st}">${escapeHtml(r.status)}</span></h3>
           <div class="t-sub"><span class="t-mono">${escapeHtml(r.pytest_args ? r.pytest_args + ' ' : '')}${escapeHtml(r.target)}</span></div>
           <div class="t-repro">
             <span class="t-claim">${r.box ? 'warm box ' + escapeHtml(r.box.slice(-6)) : 'local, in the PR worktree'}</span>
@@ -1963,7 +1981,8 @@ Anything saved to a relative path (plt.savefig('speedup.png')) is collected and 
       pre.innerHTML = escapeHtml(st.text.slice(-200000) || '(no output yet)')
         .replace(/^(FAILED .*|ERROR .*|Traceback.*|E\s{2,}.*|.*Error: .*)$/gm, '<span class="hl">$1</span>')
         .replace(/^(PASSED .*|=+ .*passed.* =+)$/gm, '<span class="ok">$1</span>');
-      pre.scrollTop = pre.scrollHeight;
+      const sc = pre.closest('.t-detail');
+      if (sc) sc.scrollTop = sc.scrollHeight;
       if (d.status === 'running') return setTimeout(() => pumpRunLog(id), 2000);
       // The run just ended. Re-rendering the pane would reset the log we have
       // been streaming, so settle the header in place instead.
@@ -1978,6 +1997,118 @@ Anything saved to a relative path (plt.savefig('speedup.png')) is collected and 
       document.querySelectorAll('#tests-detail .t-acts button').forEach(b => {
         if (b.textContent.trim() === 'Cancel') b.remove();
       });
+    }
+
+    // ── A test run that went to HF Jobs ────────────────────────────────────
+    // Same shape as a local run, but the status and the log live on the Hub
+    // rather than in local_runner, so they are read back from the job itself.
+    const jobLogCache = {};
+
+    // The server reads the target out of the job's full command; the
+    // gh-codepilot-target label is lossy and only a last resort.
+    const jobTestTarget = j => j.target || ((j.labels || {})['gh-codepilot-target'] || '').replace(/_/g, '/');
+
+    // "tests/models/qwen3 +3" rather than the last path segment of the last
+    // target, which told you nothing about what actually ran.
+    function runLabel(target) {
+      const parts = (target || '').split(/\s+/).filter(Boolean);
+      if (!parts.length) return '(no target)';
+      const head = parts[0].split('/').filter(Boolean).slice(-2).join('/');
+      return head + (parts.length > 1 ? ` +${parts.length - 1}` : '');
+    }
+
+    async function renderJobTestRun(host, id, fresh) {
+      const j = jobTests.find(x => x.id === id);
+      if (!j) { host.innerHTML = `<div class="t-pane"><div class="t-empty">That run is no longer listed.</div></div>`; return; }
+      const stage = j.stage || '';
+      const live = RUNNING.test(stage);
+      const st = /COMPLETED/i.test(stage) ? 'ok' : /ERROR|FAILED/i.test(stage) ? 'bad' : live ? 'run' : 'idle';
+      const target = jobTestTarget(j);
+      const cached = jobLogCache[id];
+      host.innerHTML = `
+        <div class="t-head">
+          <h3>${escapeHtml(runLabel(target))}
+            <span class="t-stage ${st}">${escapeHtml(stage.toLowerCase() || 'unknown')}</span></h3>
+          <div class="t-sub"><span class="t-mono">${escapeHtml(target || j.command)}</span></div>
+          <div class="t-repro">
+            <span class="t-claim">one-shot HF Job · ${escapeHtml(j.flavor || '')}${PRICE[j.flavor] ? ' · ' + PRICE[j.flavor] : ''}</span>
+            ${j.kexpr ? `<span class="t-claim warn" title="Only tests matching this -k expression ran">-k <b class="t-mono">${escapeHtml(j.kexpr)}</b></span>` : ''}
+            ${j.created_at ? `<span class="t-claim">started ${timeAgo(j.created_at)} ago</span>` : ''}
+            <span class="t-claim"><b class="t-mono">${j.id.slice(-8)}</b></span>
+            ${j.message ? `<span class="t-claim warn">${escapeHtml(j.message)}</span>` : ''}
+          </div>
+          <div class="t-acts">
+            ${live ? `<button onclick="cancelJob(this,'${id}')">Cancel</button>` : ''}
+            <button onclick="refreshJobTest('${id}')" title="Re-read status and log from the Hub">↻</button>
+            ${target ? `<button onclick="T.target='${escapeHtml(target)}';T.where='local';saveT();selectTest('new-test')">Run locally instead</button>` : ''}
+            ${j.url ? `<a href="${j.url}" target="_blank" rel="noopener">Job on the Hub ↗</a>` : ''}
+          </div>
+        </div>
+        <div class="t-pane">
+          <button class="t-copy" id="t-logtoggle" onclick="toggleRawLog()"></button>
+          <pre class="chk-log" style="max-height:none" id="t-logpre">${cached ? '' : 'loading log…'}</pre>
+        </div>`;
+      if (cached) paintJobLog(cached);
+      if (cached && !fresh && !live) return;     // finished and already read
+      const d = await fetch(`/api/jobs/logs?id=${id}`).then(r => r.json()).catch(() => ({ error: 'request failed' }));
+      if (T.selTest !== 'jobtest:' + id) return;
+      const text = d.error ? '' : (d.log || '');
+      if (!d.error) jobLogCache[id] = text;
+      paintJobLog(text, d.error);
+      if (live) {
+        clearTimeout(renderJobTestRun._t);
+        renderJobTestRun._t = setTimeout(async () => {
+          if (T.selTest !== 'jobtest:' + id) return;
+          await renderTestsRail();
+          if (T.selTest === 'jobtest:' + id) renderJobTestRun(document.getElementById('tests-detail'), id, true);
+        }, 8000);
+      }
+    }
+
+    // A job log opens with the container's `git clone` and pip install, which
+    // is thousands of progress lines before the first word of pytest output.
+    // Fold them into one line; nothing is lost, the raw log is a click away.
+    const NOISE = /^(Updating files:|Receiving objects:|Resolving deltas:|remote: (Counting|Compressing|Enumerating|Total)|Downloading |\s*Preparing metadata|\s*Building wheel|\s*Created wheel)/;
+
+    function condenseLog(text) {
+      const out = [];
+      let run = 0;
+      for (const line of (text || '').split('\n')) {
+        if (NOISE.test(line)) { run++; continue; }
+        if (run) { out.push(`\u2026 ${run} lines of checkout and install progress`); run = 0; }
+        out.push(line);
+      }
+      if (run) out.push(`\u2026 ${run} lines of checkout and install progress`);
+      return out.join('\n');
+    }
+
+    function paintJobLog(text, err, raw) {
+      const pre = document.getElementById('t-logpre'); if (!pre) return;
+      const shown = raw ? (text || '') : condenseLog(text);
+      const hidden = (text || '').split('\n').length - shown.split('\n').length;
+      pre.innerHTML = err ? `<span class="hl">${escapeHtml(err)}</span>`
+        : escapeHtml(shown || '(no output yet)')
+            .replace(/^(FAILED .*|ERROR .*|Traceback.*|E\s{2,}.*|.*Error: .*)$/gm, '<span class="hl">$1</span>')
+            .replace(/^(PASSED .*|=+ .*passed.* =+)$/gm, '<span class="ok">$1</span>')
+            .replace(/^(\u2026 \d+ lines .*)$/gm, '<span style="color:#6e7681">$1</span>');
+      const toggle = document.getElementById('t-logtoggle');
+      if (toggle) toggle.textContent = raw ? 'fold install noise' : (hidden > 0 ? `show all ${(text || '').split('\n').length} lines` : '');
+      pre._raw = text; pre._showRaw = !!raw;
+      // The <pre> has no max-height and .t-pane does not scroll either; the
+      // detail column is the scroller. Land on the summary, not the clone.
+      const scroller = pre.closest('.t-detail');
+      if (scroller && !raw) scroller.scrollTop = scroller.scrollHeight;
+    }
+
+    function toggleRawLog() {
+      const pre = document.getElementById('t-logpre'); if (!pre) return;
+      paintJobLog(pre._raw, null, !pre._showRaw);
+    }
+
+    function refreshJobTest(id) {
+      delete jobLogCache[id];
+      renderJobTestRun(document.getElementById('tests-detail'), id, true);
+      renderTestsRail();
     }
 
     // ── Boxes ──────────────────────────────────────────────────────────────
