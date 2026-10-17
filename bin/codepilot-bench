@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+"""Run a benchmark for this PR through gh-codepilot, so the run is recorded.
+
+Submitting here rather than with `hf jobs uv run` is what gets you a recipe —
+script, dependencies, hardware, PR commit and env, hashed — so the Bench tab
+can say "ran 3x identically", re-run it byte for byte, and audit how it was
+built. A job launched directly still shows up, but marked "no recipe
+recorded", and none of that is available for it.
+
+Usage:
+  codepilot-bench <script.py> [--flavor h200] [--timeout 45m]
+                  [--deps "torch accelerate"] [--env "SEED=0"] [--name N]
+                  [--results owner/dataset] [--wait]
+  codepilot-bench --review <script.py>   design review only; submits nothing
+  codepilot-bench --list                 recorded runs for this PR
+
+Write the script so the tab can read it:
+  BENCH_PLAN = {...}          declared design: question, arms, sweeps,
+                              metrics, method (warmup/reps/timer/seed), expect
+  JSON_BEGIN / JSON_END       one JSON object between bare marker lines; every
+                              list-of-dicts value becomes a chart
+  plt.savefig("name.png")     relative paths are collected and uploaded
+
+Needs RELORE_REPO and CODEPILOT_PR; both are set inside gh-codepilot sessions.
+"""
+import argparse
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+
+ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument("script", nargs="?", help="path to the benchmark script")
+ap.add_argument("--review", action="store_true", help="print the design review and exit without submitting")
+ap.add_argument("--list", action="store_true", help="list this PR's recorded runs and exit")
+ap.add_argument("--flavor", default="a10g-small")
+ap.add_argument("--timeout", default="45m")
+ap.add_argument("--deps", default="", help="extra packages, space separated")
+ap.add_argument("--env", default="", help="K=V pairs, space separated")
+ap.add_argument("--name", default="")
+ap.add_argument("--results", default="", help="dataset repo for plots and files (default: your benchmark-pr-hub)")
+ap.add_argument("--wait", action="store_true", help="follow the job log until it ends")
+a = ap.parse_args()
+
+repo, number = os.environ.get("RELORE_REPO"), os.environ.get("CODEPILOT_PR")
+if not repo or not number:
+    sys.exit("codepilot-bench: RELORE_REPO / CODEPILOT_PR not set (run inside a gh-codepilot PR session)")
+api = os.environ.get("CODEPILOT_API", "http://127.0.0.1:5050")
+
+
+def call(path, payload=None, timeout=180):
+    if payload is None:
+        req = urllib.request.Request(f"{api}{path}")
+    else:
+        req = urllib.request.Request(f"{api}{path}", data=json.dumps(payload).encode(),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:
+        try:
+            return json.load(e)
+        except Exception:
+            return {"error": f"HTTP {e.code}"}
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
+if a.list:
+    d = call(f"/api/bench?repo={repo}&number={number}")
+    if d.get("error"):
+        sys.exit(f"codepilot-bench: {d['error']}")
+    for r in d.get("runs", []):
+        mark = r["recipe"] or "ext"
+        print(f"{r['id']}  {r['stage']:<10} {mark:<7} {r['flavor']:<12} {r['name']}")
+    sys.exit(0)
+
+if not a.script:
+    ap.error("give a script (or --list)")
+try:
+    src = open(a.script).read()
+except OSError as e:
+    sys.exit(f"codepilot-bench: cannot read {a.script}: {e}")
+
+
+def show_review(d):
+    """Print what the script claims, then what reading it actually shows."""
+    plan, audit = d.get("plan"), d.get("audit") or {}
+    print("── declared by the script " + "─" * 40)
+    if not plan:
+        print("  no BENCH_PLAN — add one so the design is stated, not inferred")
+    else:
+        for k in ("question", "arms", "sweeps", "metrics", "method", "expect"):
+            if k in plan:
+                print(f"  {k:<9} {json.dumps(plan[k], default=str)[:150]}")
+    print("── read from the source " + "─" * 42)
+    if audit.get("parse_error"):
+        print(f"  DOES NOT PARSE: {audit['parse_error']}")
+        return False
+    live = [c for c in audit.get("checks", []) if c["status"] != "na"]
+    for c in audit.get("checks", []):
+        mark = {"ok": "ok  ", "warn": "WARN", "na": "n/a "}[c["status"]]
+        print(f"  [{mark}] {c['label']}")
+        if c["status"] == "warn":
+            print(f"           {c['detail']}")
+    for s in audit.get("sweeps", []):
+        print(f"  loop     {s['var']}: {s['n']} values {s['values'][:6]}")
+    ok = sum(1 for c in live if c["status"] == "ok")
+    print(f"── {ok} of {len(live)} checks pass " + "─" * 42)
+    return ok == len(live)
+
+
+if a.review:
+    d = call("/api/bench/review", {"script": src})
+    if d.get("error"):
+        sys.exit(f"codepilot-bench: {d['error']}")
+    sys.exit(0 if show_review(d) else 1)
+
+# Always review before submitting: the warnings are cheaper to read than a
+# GPU hour, and a script that does not parse must never be paid for.
+pre = call("/api/bench/review", {"script": src})
+if not pre.get("error"):
+    show_review(pre)
+    if (pre.get("audit") or {}).get("parse_error"):
+        sys.exit("codepilot-bench: refusing to submit a script that does not parse")
+
+d = call("/api/bench/run", {
+    "repo": repo, "number": int(number), "script": src,
+    "name": a.name or os.path.basename(a.script),
+    "flavor": a.flavor, "timeout": a.timeout,
+    "deps": a.deps.split(), "artifacts_repo": a.results,
+    "env": dict(p.split("=", 1) for p in a.env.split() if "=" in p),
+})
+if d.get("error"):
+    sys.exit(f"codepilot-bench: {d['error']}")
+run = d["run"]
+print(f"submitted {run['id']} on {run['flavor']} · recipe {run['recipe']} · commit {run['commit'][:10]}")
+print(f"Bench tab shows plots, metrics and the recorded setup; re-run it exactly from there.")
+print(f"logs: hf jobs logs -f {run['id']}")
+if a.wait:
+    subprocess.call(["hf", "jobs", "logs", "-f", run["id"]])

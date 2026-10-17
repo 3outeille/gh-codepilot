@@ -130,6 +130,14 @@ inside the job. **Plots**, **Metrics** and **Log** are the results. A finished
 run cannot change, so moving between its tabs costs no network request; the
 job listing is cached briefly and a terminal job's log is cached for good.
 
+**Launching one.** From the tab, or from a Claude session with
+`codepilot-bench <script.py> [--flavor h200] [--deps 'torch accelerate']`.
+Prefer either over `hf jobs uv run`: a job launched directly still appears in
+the tab, but marked **no recipe recorded** — its results and log are readable,
+yet there is nothing to re-run exactly or audit. `codepilot-bench --review
+<script.py>` prints the design review and submits nothing, exiting non-zero if
+a check fails, so a benchmark can be corrected before it costs GPU time.
+
 **Writing one.** See `examples/benchmark_example.py`. Three conventions:
 
 | Convention | Effect |
@@ -152,6 +160,7 @@ no token in the browser.
 | `repo_manager.py` | Git clone/fetch/worktree management |
 | `session_reader.py` | Reads Claude Code session history |
 | `bench_runner.py` | Benchmark recipes, submitted wrapper, log parsing, design audit |
+| `bin/codepilot-bench` | Submit / review a benchmark from a Claude session |
 | `local_runner.py` | Local pytest runs in a per-PR venv |
 | `examples/benchmark_example.py` | Worked example of the benchmark contract |
 | `pty_manager.py` | PTY lifecycle for Claude Code terminals |
