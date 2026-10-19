@@ -25,6 +25,7 @@ prereviews/
 .venv/
 app.log
 seen.json
+inbox_state.json
 *.orig
 *.bak-*
 bin/cloudflared

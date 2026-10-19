@@ -13,6 +13,7 @@ A self-hosted PWA that monitors GitHub PR/issue activity across multiple repos, 
 - **PR & Issue Tracking** — All open PRs and issues across watched repos, sorted by recent activity
 - **Activity Feed** — Comments, reviews, commits shown under each item with correct timestamps
 - **Desktop Notifications** — Native alerts for new PRs, issues, and comments (Linux + macOS)
+- **Notification Inbox** — `/inbox`: everything that happened, grouped by thread, with read/unread
 - **Browser Notifications** — PWA push notifications with click-to-open
 - **CI & Review Status** — Green/red/yellow CI badges, review decision badges, draft indicators
 - **Inline Diff Viewer** — View PR diffs without leaving the dashboard
@@ -97,10 +98,31 @@ app.py (Flask + SocketIO, port 5050)
   ├─ GET /api/sessions    → Claude Code session history
   ├─ POST /api/mute       → mute an item
   ├─ GET /terminal        → Claude Code terminal page
+  ├─ GET /inbox           → notification inbox (read/unread over events.jsonl)
+  ├─ /api/inbox           → grouped threads + unread counts
   ├─ /api/tests/local     → pytest in the PR worktree
   ├─ /api/bench/*         → benchmark runs on HF Jobs
   └─ WebSocket            → PTY I/O for Claude Code
 ```
+
+## Inbox
+
+The board answers *what is open*. `/inbox` answers *what happened while I was
+away, and have I looked at it* — a read/unread layer over `events.jsonl`.
+
+Events are grouped by item rather than listed flat, because they are
+overwhelmingly comments on a few threads (135 of 149 in a typical week) and a
+flat list of those is unreadable. Each thread shows why it concerns you — your
+PR, a review request, a mention — read from `open_items.json`, so the inbox is
+not just a firehose of every repo event.
+
+Read state lives in `inbox_state.json` as a plain set of event ids. Events
+carry no id of their own, so one is derived from the line's content, which is
+stable across restarts and works for history written before the inbox existed.
+There is deliberately no "everything before time T" shortcut: it is smaller,
+but marking one thing unread afterwards contradicts it and needs a second
+exception list to undo. Ids for events that have aged out of the feed are
+pruned on read. Every mark is undoable by the exact ids it touched.
 
 ## Benchmarks
 

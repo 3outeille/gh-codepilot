@@ -17,6 +17,7 @@ import sys
 import time
 
 import bench_runner
+import inbox
 import local_runner
 import pty_manager
 import repo_manager
@@ -472,6 +473,65 @@ def api_events():
 
     server_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return jsonify(events=events, server_time=server_time)
+
+
+# ── Notification inbox ───────────────────────────────────────────────────────
+# A read/unread view over events.jsonl, grouped by item. The board answers
+# "what is open"; this answers "what happened while I was away, and have I
+# looked at it".
+
+INBOX_WINDOW_HOURS = 24 * 14
+
+
+def _inbox_events():
+    return read_events(INBOX_WINDOW_HOURS)
+
+
+@app.route("/inbox")
+def inbox_page():
+    return render_template("inbox.html",
+                           server_time=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+
+@app.route("/api/inbox")
+def api_inbox():
+    events = _inbox_events()
+    # inbox.threads wants the whole file: it reads both buckets to say why a
+    # thread concerns you. load_open_items() returns only one category.
+    try:
+        items = json.loads(ITEMS_FILE.read_text()) if ITEMS_FILE.exists() else {}
+    except (json.JSONDecodeError, OSError):
+        items = {}
+    threads, live = inbox.threads(events, items)
+    # Read marks for events that have aged out of the feed are dead weight.
+    state = inbox.load_state()
+    if any(k not in live for k in state.get("read", {})):
+        inbox.mark(live_ids=live)
+    return jsonify(threads=threads, summary=inbox.summary(events),
+                   server_time=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+
+@app.route("/api/inbox/read", methods=["POST"])
+def api_inbox_read():
+    """Mark ids, a whole thread, or everything — read or unread."""
+    body = request.get_json(silent=True) or {}
+    read_ids = [i for i in (body.get("read") or []) if isinstance(i, str)]
+    unread_ids = [i for i in (body.get("unread") or []) if isinstance(i, str)]
+    key, want_all = body.get("key"), bool(body.get("all"))
+    undo = bool(body.get("undo"))
+
+    if key or want_all:
+        events = _inbox_events()
+        ids = [inbox.event_id(e) for e in events
+               if want_all or f"{e.get('repo','')}#{e.get('number','')}" == key]
+        (unread_ids if undo else read_ids).extend(ids)
+    if not read_ids and not unread_ids:
+        return jsonify(error="nothing to mark"), 400
+
+    inbox.mark(read_ids=read_ids, unread_ids=unread_ids)
+    events = _inbox_events()
+    return jsonify(ok=True, marked=len(read_ids) + len(unread_ids),
+                   ids=read_ids or unread_ids, summary=inbox.summary(events))
 
 
 # ── Mute/unmute ──────────────────────────────────────────────────────────────

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d1117">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" type="image/png" href="/static/icon-192.png">
+  <title>Inbox</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #e6edf3; padding: 12px 16px 60px; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 16px; font-weight: 600; display: flex; align-items: baseline; gap: 8px; }
+    h1 .n { font-size: 12px; font-weight: 600; background: #1f6feb; color: #fff; padding: 1px 8px; border-radius: 10px; }
+    h1 .n.zero { background: #21262d; color: #8b949e; }
+    .meta { font-size: 12px; color: #8b949e; display: flex; gap: 12px; align-items: center; }
+    .meta a { color: #58a6ff; text-decoration: none; }
+    .meta a:hover { text-decoration: underline; }
+    .btn { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 3px 10px; font-size: 11px; cursor: pointer; }
+    .btn:hover { background: #30363d; }
+    .btn:disabled { opacity: .5; cursor: default; }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 10px; border-bottom: 1px solid #21262d; align-items: center; }
+    .tabs button { background: none; border: none; border-bottom: 2px solid transparent; color: #8b949e; font-size: 13px; font-weight: 600; padding: 6px 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .tabs button:hover { color: #e6edf3; }
+    .tabs button.on { color: #e6edf3; border-bottom-color: #f78166; }
+    .tabs button .count { font-size: 11px; background: #21262d; color: #c9d1d9; padding: 0 7px; border-radius: 10px; }
+    .tabs .right { margin-left: auto; display: flex; gap: 8px; align-items: center; padding-bottom: 4px; }
+
+    .thread { border: 1px solid #21262d; border-radius: 8px; background: #0d1117; margin-bottom: 6px; }
+    .thread.unread { background: #10161f; border-color: #253040; }
+    .th-head { display: grid; grid-template-columns: 10px 1fr max-content; gap: 10px; align-items: start; padding: 9px 12px; cursor: pointer; }
+    .th-head:hover { background: #161b22; border-radius: 8px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #1f6feb; margin-top: 5px; }
+    .thread:not(.unread) .dot { background: transparent; border: 1px solid #30363d; }
+    .th-main { min-width: 0; }
+    .th-title { font-size: 13px; color: #c9d1d9; display: flex; gap: 7px; align-items: baseline; flex-wrap: wrap; }
+    .thread.unread .th-title { color: #e6edf3; font-weight: 600; }
+    .th-title .num { color: #6e7681; font-weight: 400; font-size: 12px; flex-shrink: 0; }
+    .th-sub { font-size: 11.5px; color: #8b949e; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .th-sub b { color: #c9d1d9; font-weight: 600; }
+    .th-right { display: flex; gap: 8px; align-items: center; font-size: 11px; color: #6e7681; white-space: nowrap; }
+    .th-right .pill { background: #1f6feb; color: #fff; border-radius: 10px; padding: 0 7px; font-weight: 600; }
+
+    .rel { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 7px; border-radius: 10px; border: 1px solid #30363d; color: #8b949e; flex-shrink: 0; }
+    .rel.mine { color: #58a6ff; border-color: #1f3b5c; background: #11203a; }
+    .rel.review_requested { color: #f78166; border-color: #5c3324; background: #2a1810; }
+    .rel.mentioned { color: #d2a8ff; border-color: #4a3268; background: #1f1630; }
+    .rel.reviewed { color: #3fb950; border-color: #238636; background: #0f2419; }
+
+    .th-body { display: none; border-top: 1px solid #21262d; padding: 4px 12px 10px 32px; }
+    .thread.open .th-body { display: block; }
+    .ev { display: grid; grid-template-columns: 8px 1fr; gap: 9px; padding: 6px 0; border-bottom: 1px solid #161b22; align-items: start; }
+    .ev:last-child { border-bottom: none; }
+    .ev .edot { width: 6px; height: 6px; border-radius: 50%; background: #1f6feb; margin-top: 6px; }
+    .ev.read .edot { background: transparent; border: 1px solid #30363d; }
+    .ev .who { font-size: 12px; color: #c9d1d9; }
+    .ev .who b { color: #e6edf3; }
+    .ev .who .t { color: #6e7681; font-size: 11px; margin-left: 6px; }
+    .ev .what { font-size: 12px; color: #8b949e; line-height: 1.5; margin-top: 2px; white-space: pre-wrap; word-break: break-word; }
+    .ev .kind { font-size: 10px; color: #6e7681; text-transform: uppercase; letter-spacing: .04em; }
+
+    .th-acts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .th-acts a, .th-acts button { font-size: 11px; padding: 3px 9px; border-radius: 6px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; cursor: pointer; text-decoration: none; }
+    .th-acts a:hover, .th-acts button:hover { background: #30363d; }
+
+    .empty { color: #484f58; font-size: 13px; text-align: center; padding: 40px 16px; }
+    #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(20px); background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 8px 14px; font-size: 12px; display: flex; gap: 12px; align-items: center; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; box-shadow: 0 4px 16px rgba(0,0,0,.4); z-index: 50; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+    #toast button { background: #1f6feb; color: #fff; border: none; border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Inbox <span class="n zero" id="badge">0</span></h1>
+    <div class="meta">
+      <span id="scope">last 14 days</span>
+      <a href="/board">board</a>
+      <a href="/list">list view</a>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button data-f="unread" onclick="setFilter('unread')">Unread<span class="count" id="c-unread">0</span></button>
+    <button data-f="all" onclick="setFilter('all')">All<span class="count" id="c-all">0</span></button>
+    <div class="right">
+      <button class="btn" onclick="expandAll()" id="expand-btn">Expand all</button>
+      <button class="btn" onclick="markAll()" id="all-btn">Mark all read</button>
+    </div>
+  </div>
+
+  <div id="list"><div class="empty">Loading…</div></div>
+  <div id="toast"><span id="toast-text"></span><button onclick="undo()" id="toast-undo">Undo</button></div>
+
+<script>
+  let threads = [], filter = 'unread', open = new Set(), lastMark = null;
+  try { filter = localStorage.getItem('inbox.filter') || 'unread'; } catch (e) {}
+
+  const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; };
+  const ago = iso => {
+    const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
+  };
+  const KIND = { new_comment: 'comment', issue_comment: 'comment', new_pr: 'opened a PR', new_issue: 'opened an issue' };
+  // The sync stores details as "author: body". Strip that prefix only when it
+  // really is the author — a generic /^[^:]+:/ would also eat the opening of a
+  // comment that happens to start "Note:" or "TODO:".
+  const body = e => {
+    const d = e.details || '', p = (e.author || '') + ':';
+    return d.startsWith(p) ? d.slice(p.length).trimStart() : d;
+  };
+  const REL = { mine: 'your PR', review_requested: 'review requested', mentioned: 'mentioned you', reviewed: 'you reviewed' };
+
+  async function load() {
+    const d = await fetch('/api/inbox').then(r => r.json()).catch(() => null);
+    if (!d) { document.getElementById('list').innerHTML = '<div class="empty">Could not load the inbox.</div>'; return; }
+    threads = d.threads || [];
+    paintCounts(d.summary);
+    render();
+  }
+
+  function paintCounts(sum) {
+    const unread = sum.unread || 0;
+    const badge = document.getElementById('badge');
+    badge.textContent = unread; badge.classList.toggle('zero', !unread);
+    document.getElementById('c-unread').textContent = sum.threads || 0;
+    document.getElementById('c-all').textContent = threads.length;
+    document.getElementById('all-btn').disabled = !unread;
+    document.title = unread ? `Inbox (${unread})` : 'Inbox';
+  }
+
+  function setFilter(f) {
+    filter = f; try { localStorage.setItem('inbox.filter', f); } catch (e) {}
+    render();
+  }
+
+  function visible() { return filter === 'unread' ? threads.filter(t => t.unread > 0) : threads; }
+
+  function render() {
+    document.querySelectorAll('.tabs button[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === filter));
+    const rows = visible();
+    const host = document.getElementById('list');
+    if (!rows.length) {
+      host.innerHTML = `<div class="empty">${filter === 'unread'
+        ? 'Nothing unread. Everything here has been looked at.'
+        : 'No activity in the last 14 days.'}</div>`;
+      return;
+    }
+    host.innerHTML = rows.map(t => {
+      const unread = t.unread > 0;
+      const latest = t.events[0] || {};
+      const others = t.authors.slice(0, 3).join(', ') + (t.authors.length > 3 ? ` +${t.authors.length - 3}` : '');
+      return `<div class="thread ${unread ? 'unread' : ''} ${open.has(t.key) ? 'open' : ''}" data-key="${esc(t.key)}">
+        <div class="th-head" onclick="toggle('${esc(t.key)}')">
+          <span class="dot"></span>
+          <div class="th-main">
+            <div class="th-title">
+              ${t.relation ? `<span class="rel ${esc(t.relation)}">${esc(REL[t.relation] || t.relation)}</span>` : ''}
+              <span>${esc(t.title)}</span>
+              <span class="num">${esc(t.repo.split('/').pop())}#${esc(t.number)}</span>
+            </div>
+            <div class="th-sub"><b>${esc(latest.author || '')}</b> ${esc(KIND[latest.event_type] || latest.event_type || '')} — ${esc(body(latest)).slice(0, 150)}</div>
+          </div>
+          <div class="th-right">
+            ${unread ? `<span class="pill">${t.unread}</span>` : ''}
+            <span>${t.total} total</span>
+            <span>${ago(t.latest)}</span>
+          </div>
+        </div>
+        <div class="th-body">
+          ${t.events.map(e => `<div class="ev ${e.read ? 'read' : ''}">
+            <span class="edot"></span>
+            <div>
+              <div class="who"><b>${esc(e.author)}</b> <span class="kind">${esc(KIND[e.event_type] || e.event_type)}</span><span class="t">${ago(e.timestamp)}</span></div>
+              <div class="what">${esc(body(e))}</div>
+            </div></div>`).join('')}
+          <div class="th-acts">
+            ${unread ? `<button onclick="markThread('${esc(t.key)}', false)">Mark read</button>`
+                     : `<button onclick="markThread('${esc(t.key)}', true)">Mark unread</button>`}
+            <a href="/terminal?repo=${encodeURIComponent(t.repo)}&number=${t.number}&type=${esc(t.category)}">Open session</a>
+            <a href="${esc(t.url)}" target="_blank" rel="noopener">GitHub ↗</a>
+            ${others ? `<span style="font-size:11px;color:#6e7681;align-self:center">${esc(others)}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function toggle(key) {
+    if (open.has(key)) open.delete(key); else open.add(key);
+    const el = document.querySelector(`.thread[data-key="${CSS.escape(key)}"]`);
+    if (el) el.classList.toggle('open', open.has(key));
+  }
+
+  function expandAll() {
+    const rows = visible();
+    const allOpen = rows.every(t => open.has(t.key));
+    rows.forEach(t => allOpen ? open.delete(t.key) : open.add(t.key));
+    document.getElementById('expand-btn').textContent = allOpen ? 'Expand all' : 'Collapse all';
+    render();
+  }
+
+  async function post(body) {
+    return fetch('/api/inbox/read', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body) }).then(r => r.json()).catch(() => ({ error: 'request failed' }));
+  }
+
+  async function markThread(key, undoIt) {
+    const d = await post({ key, undo: !!undoIt });
+    if (d.error) return toast(d.error, null);
+    lastMark = { ids: d.ids, undo: !undoIt };
+    toast(`${d.marked} marked ${undoIt ? 'unread' : 'read'}`, lastMark);
+    await load();
+  }
+
+  async function markAll() {
+    const d = await post({ all: true });
+    if (d.error) return toast(d.error, null);
+    lastMark = { ids: d.ids, undo: true };
+    toast(`${d.marked} marked read`, lastMark);
+    await load();
+  }
+
+  // Marking a hundred things read is easy to regret, so every mark is undoable
+  // by the exact ids it touched rather than by a blunt "mark all unread".
+  async function undo() {
+    if (!lastMark) return;
+    await post(lastMark.undo ? { unread: lastMark.ids } : { read: lastMark.ids });
+    lastMark = null; hideToast(); await load();
+  }
+
+  let toastTimer = null;
+  function toast(text, mark) {
+    const el = document.getElementById('toast');
+    document.getElementById('toast-text').textContent = text;
+    document.getElementById('toast-undo').style.display = mark ? '' : 'none';
+    el.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, 6000);
+  }
+  function hideToast() { document.getElementById('toast').classList.remove('show'); }
+
+  load();
+  setInterval(load, 60000);
+</script>
+</body>
+</html>

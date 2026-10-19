@@ -123,6 +123,7 @@
     <div class="meta">
       <span title="When the GitHub sync last wrote the board data">synced <time id="updated" datetime="{{ synced_at or server_time }}"></time></span>
       <button class="btn" id="sync-btn" onclick="syncNow()" title="Re-read GitHub now instead of waiting for the 10-minute cron">Sync now</button>
+      <a href="/inbox" id="inbox-link" title="Comments, reviews and new items since you last looked">inbox</a>
       <a href="/list">list view</a>
     </div>
   </header>
@@ -393,6 +394,18 @@
 
     // Refresh when the poller writes new data.
     setInterval(() => location.reload(), 5 * 60 * 1000);   // ?view= is kept, so the tab survives
+
+    // Unread count for the inbox link, fetched rather than rendered so the
+    // board does not pay for the event scan on every page load.
+    (function inboxBadge() {
+      const a = document.getElementById('inbox-link');
+      if (!a) return;
+      fetch('/api/inbox').then(r => r.json()).then(d => {
+        const n = (d.summary || {}).unread || 0;
+        a.textContent = n ? `inbox (${n})` : 'inbox';
+        if (n) a.style.fontWeight = '600';
+      }).catch(() => {});
+    })();
   </script>
 </body>
 </html>
