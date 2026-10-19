@@ -51,7 +51,11 @@
 
     .th-body { display: none; border-top: 1px solid #21262d; padding: 4px 12px 10px 32px; }
     .thread.open .th-body { display: block; }
-    .ev { display: grid; grid-template-columns: 8px 1fr; gap: 9px; padding: 6px 0; border-bottom: 1px solid #161b22; align-items: start; }
+    .ev { display: grid; grid-template-columns: 8px 1fr; gap: 9px; padding: 6px 8px 6px 0; border-bottom: 1px solid #161b22; align-items: start; text-decoration: none; border-radius: 6px; }
+    a.ev:hover { background: #161b22; }
+    a.ev:hover .what { color: #c9d1d9; }
+    .ev .go { color: #484f58; font-size: 11px; margin-left: 6px; opacity: 0; }
+    a.ev:hover .go { opacity: 1; }
     .ev:last-child { border-bottom: none; }
     .ev .edot { width: 6px; height: 6px; border-radius: 50%; background: #1f6feb; margin-top: 6px; }
     .ev.read .edot { background: transparent; border: 1px solid #30363d; }
@@ -172,12 +176,14 @@
           </div>
         </div>
         <div class="th-body">
-          ${t.events.map(e => `<div class="ev ${e.read ? 'read' : ''}">
+          ${t.events.map(e => `<a class="ev ${e.read ? 'read' : ''}" href="${esc(e.url)}" target="_blank" rel="noopener"
+               title="${e.deep ? 'Open this comment on GitHub' : 'Open the item on GitHub \u2014 this event predates comment links'}"
+               onclick="markOne('${esc(e.id)}')">
             <span class="edot"></span>
             <div>
-              <div class="who"><b>${esc(e.author)}</b> <span class="kind">${esc(KIND[e.event_type] || e.event_type)}</span><span class="t">${ago(e.timestamp)}</span></div>
+              <div class="who"><b>${esc(e.author)}</b> <span class="kind">${esc(KIND[e.event_type] || e.event_type)}</span><span class="t">${ago(e.timestamp)}</span><span class="go">${e.deep ? '\u2197' : '\u2197'}</span></div>
               <div class="what">${esc(body(e))}</div>
-            </div></div>`).join('')}
+            </div></a>`).join('')}
           <div class="th-acts">
             ${unread ? `<button onclick="markThread('${esc(t.key)}', false)">Mark read</button>`
                      : `<button onclick="markThread('${esc(t.key)}', true)">Mark unread</button>`}
@@ -207,6 +213,16 @@
   async function post(body) {
     return fetch('/api/inbox/read', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body) }).then(r => r.json()).catch(() => ({ error: 'request failed' }));
+  }
+
+  // Opening a comment is the same as having read it, which is what an inbox
+  // is for. Still undoable, by the one id it touched.
+  async function markOne(id) {
+    const d = await post({ read: [id] });
+    if (d.error) return;
+    lastMark = { ids: [id], undo: true };
+    toast('1 marked read', lastMark);
+    await load();
   }
 
   async function markThread(key, undoIt) {

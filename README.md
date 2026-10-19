@@ -116,6 +116,14 @@ flat list of those is unreadable. Each thread shows why it concerns you — your
 PR, a review request, a mention — read from `open_items.json`, so the inbox is
 not just a firehose of every repo event.
 
+Clicking a comment opens that comment on GitHub and marks it read. The sync
+records each event's own anchor (`#issuecomment-`, `#discussion_r`,
+`#pullrequestreview-`) so the link lands on what changed rather than the top of
+a thread hundreds of comments long — `PullRequestReviewEvent` omits
+`pull_request.html_url` from its payload, which is why most comment events used
+to store only the repo root. Events written before that fix fall back to the
+item page.
+
 Read state lives in `inbox_state.json` as a plain set of event ids. Events
 carry no id of their own, so one is derived from the line's content, which is
 stable across restarts and works for history written before the inbox existed.

@@ -108,6 +108,7 @@ def threads(events, items=None, state=None):
             "id": eid, "read": read, "timestamp": e.get("timestamp", ""),
             "event_type": e.get("event_type", ""), "author": e.get("author", ""),
             "details": (e.get("details") or "")[:400],
+            "url": _event_url(e), "deep": _is_deep(e.get("url", "")),
         })
         if not read:
             t["unread"] += 1
@@ -122,6 +123,29 @@ def threads(events, items=None, state=None):
         t["events"].sort(key=lambda x: x["timestamp"], reverse=True)
         t["total"] = len(t["events"])
     return out, live
+
+
+ANCHORS = ("#issuecomment-", "#discussion_r", "#pullrequestreview-", "#issue-")
+
+
+def _is_deep(url):
+    """True when the url points at the comment itself, not the thread it sits in."""
+    return any(a in (url or "") for a in ANCHORS)
+
+
+def _event_url(event):
+    """Where clicking this event should land.
+
+    Prefer the anchor the sync recorded for the comment. History written before
+    that was fixed stored the repo root for most comment events, which opens
+    the wrong page entirely — fall back to the item rather than honour it.
+    """
+    url = event.get("url", "")
+    if _is_deep(url):
+        return url
+    if "/pull/" in url or "/issues/" in url:
+        return url
+    return _item_url(event)
 
 
 def _item_url(event):

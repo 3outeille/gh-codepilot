@@ -102,6 +102,12 @@ def desktop_notify(title, body):
         )
 
 
+def item_url(repo, number, category):
+    """The item's own page — the floor a link should never fall below."""
+    kind = "pull" if category == "pr" else "issues"
+    return f"https://github.com/{repo}/{kind}/{number}"
+
+
 def log_event(event_type, category, repo, number, title, author, url, details, timestamp):
     entry = json.dumps({
         "timestamp": timestamp, "event_type": event_type, "category": category,
@@ -441,7 +447,10 @@ def process_repo_events(repos, open_items, state, is_first_run=False):
                 category = "pr" if is_pr else "issue"
                 evt_type = "new_comment" if is_pr else "issue_comment"
                 title = issue.get("title", "")
-                html_url = issue.get("html_url", "")
+                # The comment's own anchor, so the link lands on what changed
+                # rather than the top of a thread hundreds of comments long.
+                html_url = (payload.get("comment", {}).get("html_url", "")
+                            or issue.get("html_url", ""))
                 body = payload.get("comment", {}).get("body", "")[:120].replace("\n", " ")
                 details = f"{actor}: {body}" if body else f"{actor} commented"
 
@@ -452,8 +461,8 @@ def process_repo_events(repos, open_items, state, is_first_run=False):
                 title = pr.get("title", "")
                 category = "pr"
                 evt_type = "new_comment"
-                html_url = pr.get("html_url", "")
                 review = payload.get("review", {})
+                html_url = review.get("html_url", "") or pr.get("html_url", "")
                 review_body = review.get("body", "")
                 review_state = review.get("state", "")
                 if review_body:
@@ -470,7 +479,8 @@ def process_repo_events(repos, open_items, state, is_first_run=False):
                 title = pr.get("title", "")
                 category = "pr"
                 evt_type = "new_comment"
-                html_url = pr.get("html_url", "")
+                html_url = (payload.get("comment", {}).get("html_url", "")
+                            or pr.get("html_url", ""))
                 body = payload.get("comment", {}).get("body", "")[:120].replace("\n", " ")
                 details = f"{actor}: {body}" if body else f"{actor} commented on code"
 
@@ -530,7 +540,7 @@ def process_repo_events(repos, open_items, state, is_first_run=False):
                     f"#{number}: {title}\n{details}",
                 )
             log_event(evt_type, category, repo, number, title, actor,
-                      html_url or f"https://github.com/{repo}", details,
+                      html_url or item_url(repo, number, category), details,
                       timestamp=created_at)
 
             seen[event_id] = created_at
