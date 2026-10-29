@@ -1,12 +1,12 @@
 # GitHub Activity Dashboard
 
-A self-hosted PWA that monitors GitHub PR/issue activity across multiple repos, sends desktop notifications, and provides an integrated Claude Code terminal for interactive AI-assisted code review.
+A self-hosted PWA that monitors GitHub PR/issue activity across multiple repos, sends desktop notifications, and provides an integrated coding-agent terminal for interactive AI-assisted code review.
 
 ![Dashboard — PR tab with CI badges, review status, and activity](screenshots/dashboard.png)
 
 ![Expanded PR details with rendered markdown comments](screenshots/details.png)
 
-![Claude Code terminal with session history sidebar](screenshots/terminal.png)
+![Agent terminal with session history sidebar](screenshots/terminal.png)
 
 ## Features
 
@@ -20,8 +20,8 @@ A self-hosted PWA that monitors GitHub PR/issue activity across multiple repos, 
 - **Detail Viewer** — Expand any item to see the full description, comments, and reviews rendered as markdown
 - **Mute/Archive** — Hide noisy items, toggle visibility
 - **Filters** — Filter by repo, review status (needs review, approved, changes requested, draft)
-- **Claude Code Terminal** — Launch an interactive Claude Code session scoped to any PR or issue
-- **Session History** — View and resume past Claude Code sessions per repo/PR
+- **Agent Terminal** — Launch an interactive prime-agent session scoped to any PR or issue
+- **Session History** — View and resume past agent sessions per repo/PR
 - **Tests tab** — pytest in the PR's own worktree (seconds), on a warm GPU box, or as a one-shot HF Job
 - **Bench tab** — benchmarks on HF Jobs, reviewed before they run, charted after, re-runnable byte for byte
 
@@ -31,7 +31,7 @@ A self-hosted PWA that monitors GitHub PR/issue activity across multiple repos, 
 
 - Python 3.10+
 - [GitHub CLI](https://cli.github.com/) (`gh`) authenticated
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`) installed
+- [prime-agent](https://github.com/PrimeIntellect-ai/prime-agent) installed (or Claude Code, with `CODEPILOT_AGENT=claude`)
 - Linux or macOS
 
 ### Quick Install
@@ -95,14 +95,14 @@ app.py (Flask + SocketIO, port 5050)
   ├─ GET /api/events      → polling endpoint
   ├─ GET /api/detail      → PR/issue body + comments
   ├─ GET /api/diff        → PR diff
-  ├─ GET /api/sessions    → Claude Code session history
+  ├─ GET /api/sessions    → agent session history
   ├─ POST /api/mute       → mute an item
-  ├─ GET /terminal        → Claude Code terminal page
+  ├─ GET /terminal        → agent terminal page
   ├─ GET /inbox           → notification inbox (read/unread over events.jsonl)
   ├─ /api/inbox           → grouped threads + unread counts
   ├─ /api/tests/local     → pytest in the PR worktree
   ├─ /api/bench/*         → benchmark runs on HF Jobs
-  └─ WebSocket            → PTY I/O for Claude Code
+  └─ WebSocket            → PTY I/O for the agent
 ```
 
 ## Inbox
@@ -136,7 +136,7 @@ pruned on read. Every mark is undoable by the exact ids it touched.
 
 The **Bench** tab runs benchmarks on HF Jobs. (Tests live in their own tab —
 they are pass/fail and cheap, and share almost no controls with this.) A
-benchmark is usually written by Claude rather than by hand, so the tab is built
+benchmark is usually written by the agent rather than by hand, so the tab is built
 around two questions: *was this designed correctly?* and *can I get exactly
 these numbers again?*
 
@@ -160,7 +160,7 @@ inside the job. **Plots**, **Metrics** and **Log** are the results. A finished
 run cannot change, so moving between its tabs costs no network request; the
 job listing is cached briefly and a terminal job's log is cached for good.
 
-**Launching one.** From the tab, or from a Claude session with
+**Launching one.** From the tab, or from an agent session with
 `codepilot-bench <script.py> [--flavor h200] [--deps 'torch accelerate']`.
 Prefer either over `hf jobs uv run`: a job launched directly still appears in
 the tab, but marked **no recipe recorded** — its results and log are readable,
@@ -188,13 +188,14 @@ no token in the browser.
 | `app.py` | Flask web app with SocketIO |
 | `check_notifications.py` | Cron script — polls GitHub, sends notifications |
 | `repo_manager.py` | Git clone/fetch/worktree management |
-| `session_reader.py` | Reads Claude Code session history |
+| `agent_backend.py` | Which coding agent the dashboard drives (prime-agent by default) |
+| `session_reader.py` | Reads agent session history |
 | `bench_runner.py` | Benchmark recipes, submitted wrapper, log parsing, design audit |
-| `bin/codepilot-bench` | Submit / review a benchmark from a Claude session |
+| `bin/codepilot-bench` | Submit / review a benchmark from an agent session |
 | `local_runner.py` | Local pytest runs in a per-PR venv |
 | `examples/benchmark_example.py` | Worked example of the benchmark contract |
-| `pty_manager.py` | PTY lifecycle for Claude Code terminals |
+| `pty_manager.py` | PTY lifecycle for agent terminals |
 | `repos.conf` | List of repos to watch |
 | `templates/index.html` | Dashboard UI |
-| `templates/terminal.html` | Claude Code terminal page |
+| `templates/terminal.html` | Agent terminal page |
 | `static/` | PWA manifest, service worker, icons |

@@ -230,7 +230,7 @@
           {% if category == 'pr' %}
           <button class="diff-btn" onclick="toggleDiff(this, '{{ item.repo }}', {{ item.number }})">Diff</button>
           {% endif %}
-          <a class="claude-btn" href="/terminal?repo={{ item.repo }}&number={{ item.number }}&type={{ category }}&title={{ item.title | urlencode }}">Claude Code</a>
+          <a class="claude-btn" href="/terminal?repo={{ item.repo }}&number={{ item.number }}&type={{ category }}&title={{ item.title | urlencode }}">{{ agent_label }}</a>
           <button class="mute-btn" onclick="muteItem('{{ item_key }}', this)">
             {{ 'Unmute' if item_key in muted else 'Mute' }}
           </button>

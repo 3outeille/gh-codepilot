@@ -1,4 +1,4 @@
-"""PTY lifecycle management — spawns Claude Code in a pseudo-terminal and bridges I/O to SocketIO."""
+"""PTY lifecycle management — spawns the coding agent in a pseudo-terminal and bridges I/O to SocketIO."""
 
 import codecs
 import errno
@@ -6,15 +6,16 @@ import fcntl
 import os
 import pty
 import select
-import shutil
 import signal
 import struct
 import termios
 
 import eventlet
 
+import agent_backend
+
 # Active PTY sessions keyed by "<socket sid>:<slot>" — one browser page can
-# hold several live Claude sessions (tabs) on one socket.
+# hold several live agent sessions (tabs) on one socket.
 active_ptys = {}
 
 
@@ -29,10 +30,11 @@ def _split(key):
 READ_CHUNK = 65536
 
 
-def spawn_claude(sid, socketio, cwd, resume_session_id=None, env_extra=None,
-                 initial_prompt=None, rows=24, cols=80):
+def spawn_agent(sid, socketio, cwd, resume_session_id=None, env_extra=None,
+                initial_prompt=None, rows=24, cols=80):
     """
-    Spawn Claude Code in a PTY at the given CWD. Optionally resume a session.
+    Spawn the configured coding agent in a PTY at the given CWD. Optionally
+    resume a session.
 
     env_extra: extra environment for the session (e.g. RELORE_API / RELORE_REPO
     so `relore` works bare inside it).
@@ -42,9 +44,9 @@ def spawn_claude(sid, socketio, cwd, resume_session_id=None, env_extra=None,
     pid, fd = pty.fork()
 
     if pid == 0:
-        # Child process. Set the window size before exec so Claude Code's
-        # first render uses the real terminal width instead of the 80x24
-        # default (a mismatch makes Ink's row math garble the output).
+        # Child process. Set the window size before exec so the agent's first
+        # render uses the real terminal width instead of the 80x24 default (a
+        # mismatch makes the TUI's row math garble the output).
         try:
             fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
         except (OSError, IOError):
@@ -52,22 +54,13 @@ def spawn_claude(sid, socketio, cwd, resume_session_id=None, env_extra=None,
         os.chdir(str(cwd))
         env = os.environ.copy()
         env["TERM"] = "xterm-256color"
-        # Claude Code's fullscreen renderer takes the alternate screen and
-        # captures the mouse. In xterm.js that kills scrollback and turns wheel
-        # and click events into escape sequences for Claude instead of the
-        # terminal. Keep the classic inline renderer (overridable via env).
-        env.setdefault("CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN", "1")
-        env.setdefault("CLAUDE_CODE_DISABLE_MOUSE", "1")
+        agent_backend.interactive_env(env)
         env.update(env_extra or {})
 
-        cmd = [shutil.which("claude") or "claude"]
-        if resume_session_id:
-            cmd.extend(["--resume", resume_session_id])
-        elif initial_prompt:
-            # Context only: it rides along as system prompt so Claude knows the
-            # item and the tools, but no turn runs until you type.
-            cmd.extend(["--append-system-prompt", initial_prompt])
-
+        # On a fresh session the opening message rides along as system prompt,
+        # so the agent knows the item and the tools, but no turn runs until you
+        # type.
+        cmd = agent_backend.interactive_cmd(resume_session_id, initial_prompt)
         os.execvpe(cmd[0], cmd, env)
     else:
         # Parent: set fd non-blocking so eventlet-patched select yields cooperatively

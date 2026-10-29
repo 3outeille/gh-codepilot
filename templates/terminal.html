@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0d1117">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="icon" type="image/png" href="/static/icon-192.png">
-  <title>Claude Code — {{ repo }}#{{ number }}</title>
+  <title>{{ agent_label }} — {{ repo }}#{{ number }}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/css/diff2html.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
@@ -584,7 +584,7 @@
     <div class="splitter" id="splitter"></div>
     <div class="terminal-area">
       <div class="session-tabs">
-        <button class="new-session-btn" onclick="startNew()" title="Start a new Claude session">+ New</button>
+        <button class="new-session-btn" onclick="startNew()" title="Start a new {{ agent_label }} session">+ New</button>
         <div class="session-list" id="session-list"><span class="no-sessions">Loading sessions…</span></div>
       </div>
       <div class="terminal-overlay" id="overlay">
@@ -613,7 +613,7 @@
     const CATEGORY = '{{ category }}';
     const ME = '{{ me }}';
 
-    // ── Terminal slots: one live Claude session per tab, all on one socket ──
+    // ── Terminal slots: one live agent session per tab, all on one socket ──
     const socket = io();
     const slots = {};          // slot id → { term, fit, el, ready, ended, sessionId, label, status }
     let activeSlot = null;
@@ -652,8 +652,8 @@
       else showOverlay(s.status, s.ended);
       renderTabs();
     }
-    // × on a tab: stop Claude if it's running and take the session off the strip.
-    // The transcript stays on disk (claude --resume <id> from a shell still works).
+    // × on a tab: stop the agent if it's running and take the session off the strip.
+    // The transcript stays on disk (`--resume <id>` from a shell still works).
     function closeSlot(id, ev) {
       ev?.stopPropagation();
       const s = slots[id]; if (!s) return;
@@ -2791,7 +2791,7 @@ Anything saved to a relative path (plt.savefig('speedup.png')) is collected and 
       list.innerHTML = (live.join('') + idle.join('') + more) || '<span class="no-sessions">No sessions yet</span>';
     }
 
-    // Load past sessions (from ~/.claude/projects) and redraw the tab strip.
+    // Load past sessions (the agent's own transcript store) and redraw the tab strip.
     async function loadSessions() {
       try {
         const res = await fetch(`/api/sessions?repo=${encodeURIComponent(REPO)}&number=${NUMBER}&type=${CATEGORY}`);

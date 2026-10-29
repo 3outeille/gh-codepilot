@@ -32,7 +32,8 @@ info "Checking prerequisites..."
 
 command -v git >/dev/null || error "git is required. Install it first."
 command -v gh >/dev/null || error "GitHub CLI (gh) is required. Install from https://cli.github.com/"
-command -v claude >/dev/null || warn "Claude Code CLI (claude) not found. Terminal feature won't work until installed."
+command -v prime-agent >/dev/null || command -v claude >/dev/null || \
+  warn "No coding agent found (prime-agent, or claude with CODEPILOT_AGENT=claude). Terminal feature won't work until one is installed."
 
 # Check gh auth
 if ! gh auth status &>/dev/null; then
