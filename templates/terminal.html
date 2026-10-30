@@ -607,6 +607,7 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/js/diff2html.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/js/diff2html-ui.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
   <script>
     const REPO = '{{ repo }}';
     const NUMBER = {{ number }};
@@ -2475,6 +2476,15 @@ Anything saved to a relative path (plt.savefig('speedup.png')) is collected and 
       if (left <= 0) row.remove();
       else row.querySelector('.xp').innerHTML = `<span onclick="expandUp(this, '${escapeHtml(path)}', ${from}, ${prevEnd}, ${delta}, 20)">⋯ expand 20 lines ↑</span><span onclick="expandUp(this, '${escapeHtml(path)}', ${from}, ${prevEnd}, ${delta}, 100000)">expand all ${left} ↑</span>`;
     }
+    // hljs tokens can span lines (docstrings, block comments); close and reopen them per row.
+    function highlightedRows(html) {
+      let open = [];
+      return html.split('\n').map(line => {
+        const row = open.join('') + line;
+        for (const [tag] of line.matchAll(/<span[^>]*>|<\/span>/g)) tag === '</span>' ? open.pop() : open.push(tag);
+        return row + '</span>'.repeat(open.length);
+      });
+    }
     async function openFileView(path, line) {
       const fv = document.getElementById('fileview');
       document.getElementById('fv-path').textContent = path;
@@ -2486,7 +2496,7 @@ Anything saved to a relative path (plt.savefig('speedup.png')) is collected and 
       const lang = path.split('.').pop();
       let html = '';
       try { html = hljs.highlight(lines.join('\n'), { language: lang }).value; } catch (e) { html = escapeHtml(lines.join('\n')); }
-      const rows = html.split('\n');
+      const rows = highlightedRows(html);
       document.getElementById('fv-body').innerHTML = `<table>${rows.map((r, i) => `<tr id="fvl-${i + 1}" ${i + 1 === line ? 'class="hit"' : ''}><td class="ln" onclick="showWhy(event, '${escapeHtml(path)}', ${i + 1})">${i + 1}</td><td class="cd">${r || ' '}</td></tr>`).join('')}</table>`;
       if (line) document.getElementById(`fvl-${line}`)?.scrollIntoView({ block: 'center' });
     }
